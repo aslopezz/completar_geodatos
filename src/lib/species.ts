@@ -74,7 +74,7 @@ async function searchCatalog(query: string, signal?: AbortSignal): Promise<Speci
     or: `(canonical_name.ilike.*${term}*,genero.ilike.*${term}*,epiteto_especifico.ilike.*${term}*)`,
     limit: '20',
   })
-  const response = await fetch(`${supabaseUrl}/rest/v1/registros_vista?${params}`, {
+  const response = await fetch(`${supabaseUrl}/rest/v1/especies_vista?${params}`, {
     headers: { apikey: supabaseKey },
     signal,
   })

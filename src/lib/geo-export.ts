@@ -11,7 +11,7 @@ function coordinate([lng, lat]: LngLat): string {
   return `${lng},${lat}`
 }
 
-export function exportKmz(data: ImportResult, points: number[], species: Record<number, Species>, quantities: Record<number, number>, zone: UtmZone) {
+export function exportKmz(data: ImportResult, points: number[], species: Record<number, Species>, quantities: Record<number, number>, zone: UtmZone, trackNames: Record<number, string> = {}) {
   const pointPlacemarks = points.map((index) => {
     const point = data.points[index]
     const selected = species[index]
@@ -35,12 +35,12 @@ export function exportKmz(data: ImportResult, points: number[], species: Record<
     return `<Placemark><name>${xml(point.name)}</name>${timestamp}${details ? `<description>${xml(details)}</description>` : ''}${speciesData}<Point><coordinates>${coordinate(point.coord)}</coordinates></Point></Placemark>`
   }).join('')
 
-  const trackPlacemarks = data.tracks.map((track) => {
+  const trackPlacemarks = data.tracks.map((track, index) => {
     const coords = track.coords.map(coordinate).join(' ')
     const start = toUtm(track.coords[0], zone)
     const end = toUtm(track.coords[track.coords.length - 1], zone)
     const lengthKm = trackLengthKm(track.coords)
-    return `<Placemark><name>${xml(track.name)}</name><description>${track.coords.length} puntos de ruta · ${lengthKm.toFixed(2)} km</description><ExtendedData><Data name="longitud_km"><value>${lengthKm.toFixed(3)}</value></Data><Data name="utm_zona"><value>${zone}S</value></Data><Data name="utm_inicio_este_m"><value>${start.easting.toFixed(3)}</value></Data><Data name="utm_inicio_norte_m"><value>${start.northing.toFixed(3)}</value></Data><Data name="utm_termino_este_m"><value>${end.easting.toFixed(3)}</value></Data><Data name="utm_termino_norte_m"><value>${end.northing.toFixed(3)}</value></Data></ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coords}</coordinates></LineString></Placemark>`
+    return `<Placemark><name>${xml(trackNames[index]?.trim() || track.name)}</name><description>${track.coords.length} puntos de ruta · ${lengthKm.toFixed(2)} km</description><ExtendedData><Data name="longitud_km"><value>${lengthKm.toFixed(3)}</value></Data><Data name="utm_zona"><value>${zone}S</value></Data><Data name="utm_inicio_este_m"><value>${start.easting.toFixed(3)}</value></Data><Data name="utm_inicio_norte_m"><value>${start.northing.toFixed(3)}</value></Data><Data name="utm_termino_este_m"><value>${end.easting.toFixed(3)}</value></Data><Data name="utm_termino_norte_m"><value>${end.northing.toFixed(3)}</value></Data></ExtendedData><LineString><tessellate>1</tessellate><coordinates>${coords}</coordinates></LineString></Placemark>`
   }).join('')
   const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${xml(data.fileName)}</name>${pointPlacemarks}${trackPlacemarks}</Document></kml>`
   download(new Blob([zipSync({ 'doc.kml': strToU8(kml) })], { type: 'application/vnd.google-earth.kmz' }), `${baseName(data.fileName)}.kmz`)

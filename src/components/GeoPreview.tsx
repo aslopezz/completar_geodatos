@@ -15,6 +15,7 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
   const [checked, setChecked] = useState<Set<number>>(() => new Set())
   const [overrides, setOverrides] = useState<Record<number, PointOverride>>({})
   const [bulk, setBulk] = useState<PointOverride>({ estacion: '', protocolo: '', metodologia: '' })
+  const [trackNames, setTrackNames] = useState<Record<number, string>>({})
   const [utmZone, setUtmZone] = useState<UtmZone>(19)
   const [removedPoints, setRemovedPoints] = useState<Set<number>>(() => new Set())
   const visiblePoints = data.points.filter((_, index) => !removedPoints.has(index))
@@ -149,9 +150,9 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
             </select>
           </label>
           <button type="button" className="demo-button demo-button-secondary" onClick={() => exportCsv(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, meta, overrides)}>
-            Exportar CSV (app gráficos)
+            Exportar CSV
           </button>
-          <button type="button" className="demo-button" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone)}>
+          <button type="button" className="demo-button" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone, trackNames)}>
             Exportar KMZ
           </button>
         </div>
@@ -363,7 +364,14 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
                     const end = track.coords[track.coords.length - 1]
                     return (
                       <tr key={`t${index}`}>
-                        <td className="sticky-col sticky-col-name">{track.name}</td>
+                        <td className="sticky-col sticky-col-name">
+                          <input
+                            className="demo-input assign-input"
+                            value={trackNames[index] ?? track.name}
+                            aria-label={`Nombre del track ${track.name}`}
+                            onChange={(event) => setTrackNames((current) => ({ ...current, [index]: event.target.value }))}
+                          />
+                        </td>
                         <td className="demo-muted">{Math.round(trackLengthKm(track.coords) * 1000).toLocaleString('es-CL')}</td>
                         <td className="demo-muted">{formatCoordinate(start)}</td>
                         <td className="demo-muted">{formatCoordinate(end)}</td>
