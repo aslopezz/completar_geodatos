@@ -1,12 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { trackLengthKm, type ImportResult, type LngLat } from '#/lib/geo-import'
-import { searchSpecies, speciesLabel, type Species } from '#/lib/species'
-import { exportCsv, exportKmz, metodologiaFor, nextMetodologia, type CsvMeta, type PointOverride } from '#/lib/geo-export'
+import type { Species } from '#/lib/species'
+import { exportCsv, exportKmz, exportTracksCsv,metodologiaFor, nextMetodologia, type CsvMeta, type PointOverride } from '#/lib/geo-export'
+import { getProtocolos } from '#/lib/protocolos'
+import { resolvePointAttributes } from '#/lib/point-attributes'
+import { useEstaciones } from '#/hooks/useEstaciones'
+import EstacionesPanel from '#/components/EstacionesPanel'
+import PointsTable, { type PointGroup } from '#/components/PointsTable'
+import { estacionColor } from '#/lib/estaciones'
+import { formatCoordinate } from '#/lib/format'
 import { formatUtm, toUtm, type UtmZone } from '#/lib/utm'
 
 const W = 800
 const H = 480
 const PAD = 24
+const NO_ESTACION = '__none__'
 
 export default function GeoPreview({ data }: { data: ImportResult }) {
   const [selectedSpecies, setSelectedSpecies] = useState<Record<number, Species>>({})
@@ -18,6 +26,9 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
   const [trackNames, setTrackNames] = useState<Record<number, string>>({})
   const [utmZone, setUtmZone] = useState<UtmZone>(19)
   const [removedPoints, setRemovedPoints] = useState<Set<number>>(() => new Set())
+  const { estaciones, create: createEstacion, update: updateEstacion, remove: removeEstacion, assign, unassign, getEstacionOf, pointsOfEstacion } = useEstaciones()
+  const [assignTarget, setAssignTarget] = useState('')
+  const estacionCounts = Object.fromEntries(estaciones.map((e) => [e.id, pointsOfEstacion(e.id).filter((index) => !removedPoints.has(index)).length]))
   const visiblePoints = data.points.filter((_, index) => !removedPoints.has(index))
   const visibleIndexes = data.points.map((_, index) => index).filter((index) => !removedPoints.has(index))
   const checkedIndexes = visibleIndexes.filter((index) => checked.has(index))
@@ -29,6 +40,12 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
       if (!next.delete(index)) next.add(index)
       return next
     })
+  }
+
+  function applyAssign() {
+    if (assignTarget === NO_ESTACION) unassign(checkedIndexes)
+    else if (assignTarget) assign(assignTarget, checkedIndexes)
+    setAssignTarget('')
   }
 
   function applyBulk() {
@@ -51,6 +68,42 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
       return next
     })
   }
+  function setPointProtocolo(index: number, value: string) {
+    setOverrides((current) => ({
+      ...current,
+      [index]: {
+        ...current[index],
+        protocolo: value,
+        metodologia: nextMetodologia(current[index]?.protocolo?.trim() || meta.protocolo, value, current[index]?.metodologia ?? meta.metodologia),
+      },
+    }))
+  }
+
+  function placeholdersFor(index: number) {
+    const estacion = getEstacionOf(index)
+    const base = resolvePointAttributes(data.points[index].name, meta, undefined, estacion)
+    const sigla = metodologiaFor(overrides[index]?.protocolo)
+    return {
+      estacion: base.estacion,
+      protocolo: base.protocolo || 'Protocolo',
+      metodologia: (estacion ? sigla || base.metodologia : base.metodologia || sigla) || 'Sigla',
+    }
+  }
+
+  // Un grupo por estación (en orden de creación, sin los vacíos) y "Sin asignar" al final.
+  // Sin estaciones queda un solo grupo sin encabezado, igual que la tabla de siempre.
+  const groups: PointGroup[] = estaciones.length === 0
+    ? [{ key: 'all', label: null, indexes: visibleIndexes }]
+    : [
+        ...estaciones.map((estacion, order) => ({
+          key: estacion.id,
+          label: [estacion.nombre.trim() || '(sin nombre)', estacion.protocolo.trim()].filter(Boolean).join(' · '),
+          color: estacionColor(order),
+          indexes: visibleIndexes.filter((index) => getEstacionOf(index)?.id === estacion.id),
+        })).filter((group) => group.indexes.length > 0),
+        { key: 'none', label: 'Sin asignar', indexes: visibleIndexes.filter((index) => !getEstacionOf(index)) },
+      ].filter((group) => group.indexes.length > 0)
+
   const { project, hasData } = useMemo(() => {
     const all: LngLat[] = [
       ...visiblePoints.map((p) => p.coord),
@@ -82,7 +135,6 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
     }
   }, [data.tracks, visiblePoints])
 
-  const totalKm = data.tracks.reduce((sum, t) => sum + trackLengthKm(t.coords), 0)
 
   return (
     <div className="flex flex-col gap-4">
@@ -109,13 +161,16 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
             ))}
             {visiblePoints.map((p) => {
               const [x, y] = project(p.coord)
+              const index = data.points.indexOf(p)
+              const estacionId = getEstacionOf(index)?.id
+              const order = estaciones.findIndex((e) => e.id === estacionId)
               return (
                 <circle
-                  key={data.points.indexOf(p)}
+                  key={index}
                   cx={x}
                   cy={y}
                   r={4.5}
-                  fill="var(--palm)"
+                  fill={order >= 0 ? estacionColor(order) : 'var(--palm)'}
                   stroke="var(--surface-strong)"
                   strokeWidth={1.5}
                 >
@@ -132,14 +187,6 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          <span className="demo-pill">{data.format.toUpperCase()}</span>
-          <span className="demo-pill">{visiblePoints.length} puntos</span>
-          <span className="demo-pill">{data.tracks.length} tracks</span>
-          {data.tracks.length > 0 && (
-            <span className="demo-pill">{totalKm.toFixed(2)} km</span>
-          )}
-        </div>
 
         <div className="flex flex-wrap gap-2">
           <label className="utm-zone-control">
@@ -149,58 +196,70 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
               <option value={19}>19S</option>
             </select>
           </label>
-          <button type="button" className="demo-button demo-button-secondary" onClick={() => exportCsv(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, meta, overrides)}>
-            Exportar CSV
+          <button type="button" className="demo-button demo-button-points" onClick={() => exportCsv(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, meta, overrides, getEstacionOf)}>
+            Exportar CSV puntos
           </button>
-          <button type="button" className="demo-button" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone, trackNames)}>
+           {data.tracks.length > 0 && (
+            <button type="button" className="demo-button demo-button-tracks" onClick={() => exportTracksCsv(data, utmZone, trackNames)}>
+              Exportar CSV tracks
+            </button>
+          )}
+          <button type="button" className="demo-button demo-button-points" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone, trackNames)}>
             Exportar KMZ
           </button>
         </div>
 
         <div className="demo-list-item grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          {([
-            ['terreno', 'Terreno', 'Nombre de la campaña'],
-            ['estacion', 'Estación (por defecto)', 'Vacío = nombre de cada punto'],
-            ['protocolo', 'Protocolo (por defecto)', 'Elige o escribe'],
-            ['metodologia', 'Metodología (sigla)', 'Auto según protocolo'],
-          ] as const).map(([key, label, hint]) => (
-            <label key={key} className="flex flex-col gap-1 font-semibold">
-              {label}
-              <input
-                className="demo-input"
-                value={meta[key]}
-                placeholder={hint}
-                list={key === 'protocolo' ? 'protocolos-muestreo' : undefined}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setMeta((current) => ({
-                    ...current,
-                    [key]: value,
-                    ...(key === 'protocolo' ? { metodologia: nextMetodologia(current.protocolo, value, current.metodologia) } : {}),
-                  }))
-                }}
-              />
-            </label>
-          ))}
+          <label className="flex flex-col gap-1 font-semibold">
+            Terreno
+            <input
+              className="demo-input"
+              value={meta.terreno}
+              placeholder="Nombre de la campaña"
+              onChange={(event) => {
+                const value = event.target.value
+                setMeta((current) => ({ ...current, terreno: value }))
+              }}
+            />
+          </label>
           <datalist id="protocolos-muestreo">
-            <option value="Transecta" />
-            <option value="Transecta para aves" />
-            <option value="Censo" />
-            <option value="Punto de aves" />
-            <option value="Punto de conteo" />
-            <option value="Recorrido pedestre" />
-            <option value="Trampas cámara" />
-            <option value="Trampas Sherman" />
-            <option value="Detección de ecolocalizaciones" />
+            {getProtocolos().map((protocolo) => (
+              <option key={protocolo.id} value={protocolo.nombre} label={protocolo.sigla ? `${protocolo.sigla} · ${protocolo.nombre}` : protocolo.nombre} />
+            ))}
           </datalist>
           <p className="demo-muted m-0 text-xs sm:col-span-2 lg:col-span-4">
-            El CSV para la app solo incluye puntos con especie asignada ({visiblePoints.filter((p) => selectedSpecies[data.points.indexOf(p)]).length} de {visiblePoints.length}).
+            El CSV incluye todos los puntos; los que no tienen especie ({visiblePoints.filter((p) => !selectedSpecies[data.points.indexOf(p)]).length} de {visiblePoints.length}) salen con las columnas de especie vacías.
           </p>
         </div>
+
+        <EstacionesPanel
+          estaciones={estaciones}
+          counts={estacionCounts}
+          onCreate={() => createEstacion()}
+          onUpdate={updateEstacion}
+          onRemove={removeEstacion}
+        />
 
         {checkedIndexes.length > 0 && (
           <div className="demo-list-item flex flex-wrap items-end gap-2 text-sm">
             <span className="font-semibold">{checkedIndexes.length} seleccionados</span>
+            {estaciones.length > 0 && (
+              <>
+                <label className="flex flex-col gap-1 font-semibold">
+                  Asignar a estación
+                  <select className="demo-select" value={assignTarget} onChange={(event) => setAssignTarget(event.target.value)}>
+                    <option value="" disabled>Elegir…</option>
+                    <option value={NO_ESTACION}>— Sin estación —</option>
+                    {estaciones.map((estacion) => (
+                      <option key={estacion.id} value={estacion.id}>{estacion.nombre.trim() || '(sin nombre)'}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="demo-button" disabled={!assignTarget} onClick={applyAssign}>
+                  Asignar
+                </button>
+              </>
+            )}
             <label className="flex flex-col gap-1 font-semibold">
               Estación
               <input className="demo-input" value={bulk.estacion} placeholder="Sin cambios si está vacío" onChange={(event) => setBulk((current) => ({ ...current, estacion: event.target.value }))} />
@@ -236,123 +295,35 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
 
         {data.points.length > 0 && (
           <div className="flex min-w-0 flex-col gap-2">
-            <h3 className="demo-section-title">Puntos · UTM {utmZone}S (WGS84)</h3>
+            <h3 className="demo-section-title">Puntos · UTM {utmZone}S y grados decimales</h3>
             <p className="demo-muted m-0 text-xs sm:col-span-2 lg:col-span-4">
               Puedes seleccionar puntos y definir protocolos y estaciones por grupo.
               También está la opción de eliminar puntos para limpiar la vista de la tabla.
             </p>
-            <div className="demo-table-shell max-h-96 overflow-auto">
-              <table className="demo-table text-sm whitespace-nowrap">
-                <thead>
-                  <tr>
-                    <th className="sticky-col sticky-col-check">
-                      <input
-                        type="checkbox"
-                        checked={allChecked}
-                        aria-label="Seleccionar todos los puntos"
-                        onChange={() => setChecked(allChecked ? new Set() : new Set(visibleIndexes))}
-                      />
-                    </th>
-                    <th className="sticky-col sticky-col-name sticky-col-after-check">Nombre</th><th>Coordenadas (°)</th><th>UTM (m)</th><th>Fecha</th><th>Hora</th><th>Estación</th><th>Protocolo</th><th>Metodología</th><th>Especie</th><th>Cantidad</th><th>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visiblePoints.map((point) => {
-                    const index = data.points.indexOf(point)
-                    return (
-                    <tr key={`p${index}`}>
-                      <td className="sticky-col sticky-col-check">
-                        <input
-                          type="checkbox"
-                          checked={checked.has(index)}
-                          aria-label={`Seleccionar punto ${point.name}`}
-                          onChange={() => toggleChecked(index)}
-                        />
-                      </td>
-                      <td className="sticky-col sticky-col-name sticky-col-after-check">{point.name}</td>
-                      <td className="demo-muted">{formatCoordinate(point.coord)}</td>
-                      <td className="demo-muted">{formatUtm(toUtm(point.coord, utmZone))}</td>
-                      <td className="demo-muted">{point.timestamp ? formatTimestampPart(point.timestamp, 'date') : '—'}</td>
-                      <td className="demo-muted">{point.timestamp ? formatTimestampPart(point.timestamp, 'time') : '—'}</td>
-                      <td>
-                        <input
-                          className="demo-input assign-input"
-                          value={overrides[index]?.estacion ?? ''}
-                          placeholder={meta.estacion.trim() || point.name}
-                          aria-label={`Estación de ${point.name}`}
-                          onChange={(event) => setOverrides((current) => ({ ...current, [index]: { ...current[index], estacion: event.target.value } }))}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="demo-input assign-input"
-                          list="protocolos-muestreo"
-                          value={overrides[index]?.protocolo ?? ''}
-                          placeholder={meta.protocolo || 'Protocolo'}
-                          aria-label={`Protocolo de ${point.name}`}
-                          onChange={(event) => {
-                            const value = event.target.value
-                            setOverrides((current) => ({
-                              ...current,
-                              [index]: {
-                                ...current[index],
-                                protocolo: value,
-                                metodologia: nextMetodologia(current[index]?.protocolo?.trim() || meta.protocolo, value, current[index]?.metodologia ?? meta.metodologia),
-                              },
-                            }))
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="demo-input assign-input"
-                          value={overrides[index]?.metodologia ?? ''}
-                          placeholder={meta.metodologia || metodologiaFor(overrides[index]?.protocolo) || 'Sigla'}
-                          aria-label={`Metodología de ${point.name}`}
-                          onChange={(event) => setOverrides((current) => ({ ...current, [index]: { ...current[index], metodologia: event.target.value } }))}
-                        />
-                      </td>
-                      <td className="species-cell">
-                        <SpeciesPicker
-                          value={selectedSpecies[index]}
-                          onSelect={(species) => setSelectedSpecies((current) => ({ ...current, [index]: species }))}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="demo-input quantity-input"
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={quantities[index] ?? 1}
-                          aria-label={`Cantidad para ${point.name}`}
-                          onChange={(event) => {
-                            const next = Number(event.target.value)
-                            setQuantities((current) => ({ ...current, [index]: Number.isFinite(next) && next >= 1 ? Math.floor(next) : 1 }))
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="demo-button alert demo-button-secondary point-remove"
-                          aria-label={`Quitar punto ${point.name}`}
-                          onClick={() => setRemovedPoints((current) => new Set(current).add(index))}
-                        >
-                          Quitar
-                        </button>
-                      </td>
-                    </tr>
-                  )})}
-                </tbody>
-              </table>
-            </div>
+            <PointsTable
+              points={data.points}
+              groups={groups}
+              utmZone={utmZone}
+              checked={checked}
+              allChecked={allChecked}
+              overrides={overrides}
+              species={selectedSpecies}
+              quantities={quantities}
+              placeholdersFor={placeholdersFor}
+              onToggle={toggleChecked}
+              onToggleAll={() => setChecked(allChecked ? new Set() : new Set(visibleIndexes))}
+              onOverride={(index, patch) => setOverrides((current) => ({ ...current, [index]: { ...current[index], ...patch } }))}
+              onProtocolo={setPointProtocolo}
+              onSelectSpecies={(index, species) => setSelectedSpecies((current) => ({ ...current, [index]: species }))}
+              onQuantity={(index, next) => setQuantities((current) => ({ ...current, [index]: Number.isFinite(next) && next >= 1 ? Math.floor(next) : 1 }))}
+              onRemove={(index) => setRemovedPoints((current) => new Set(current).add(index))}
+            />
           </div>
         )}
 
         {data.tracks.length > 0 && (
-          <div className="flex min-w-0 flex-col gap-2">
-            <h3 className="demo-section-title">Tracks · UTM {utmZone}S (WGS84)</h3>
+          <div className="flex min-w-0 flex-col gap-2 mt-2">
+            <h3 className="demo-section-title">Tracks · UTM {utmZone}S y grados decimales</h3>
             <div className="demo-table-shell max-h-96 overflow-auto">
               <table className="demo-table text-sm whitespace-nowrap">
                 <thead>
@@ -390,74 +361,3 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
   )
 }
 
-function formatCoordinate([lng, lat]: LngLat): string {
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-}
-
-function formatTimestampPart(timestamp: string, part: 'date' | 'time'): string {
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return timestamp
-  return new Intl.DateTimeFormat('es-CL', {
-    ...(part === 'date' ? { dateStyle: 'short' as const } : { timeStyle: 'short' as const }),
-  }).format(date)
-}
-
-function SpeciesPicker({ value, onSelect }: { value?: Species; onSelect: (species: Species) => void }) {
-  const [query, setQuery] = useState(value ? speciesLabel(value) : '')
-  const [results, setResults] = useState<Species[]>([])
-  const [error, setError] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open || query.trim().length < 2 || (value && query === speciesLabel(value))) {
-      setResults([])
-      setError(false)
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => {
-      searchSpecies(query, controller.signal).then((found) => { setResults(found); setError(false); setLoading(false) }).catch((e: unknown) => {
-        if (e instanceof Error && e.name === 'AbortError') return
-        setError(true)
-        setLoading(false)
-      })
-    }, 250)
-    return () => { window.clearTimeout(timer); controller.abort() }
-  }, [open, query, value])
-
-  return (
-    <div className="species-picker">
-      <input
-        className="demo-input species-search"
-        value={query}
-        placeholder="Nombre científico…"
-        aria-label="Buscar especie por nombre científico"
-        onFocus={() => setOpen(true)}
-        onChange={(event) => { setQuery(event.target.value); setOpen(true) }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-      />
-      {loading && <span className="species-spinner" role="status" aria-label="Buscando especie" />}
-      {open && query.trim().length >= 2 && (results.length > 0 || error) && (
-        <div className="species-options" role="listbox">
-          {error && <p className="demo-muted species-message">No se pudo cargar el catálogo.</p>}
-          {results.map((species, index) => (
-            <button
-              type="button"
-              className="species-option"
-              key={`${speciesLabel(species)}-${species.nombre_comun_terreno}-${index}`}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => { onSelect(species); setQuery(speciesLabel(species)); setOpen(false) }}
-            >
-              <span>{speciesLabel(species) || 'Sin nombre científico'}{species.fuente === 'gbif' && <small className="demo-muted"> · GBIF</small>}</span>
-              {species.nombre_comun_terreno && <small className="demo-muted">{species.nombre_comun_terreno}</small>}
-            </button>
-          ))}
-        </div>
-      )}
-      {value && <span className="species-selected">{value.nombre_comun_terreno || speciesLabel(value)}</span>}
-    </div>
-  )
-}

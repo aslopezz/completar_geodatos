@@ -30,6 +30,17 @@
   --alert-bg: #fde8e8;
   --alert-text: #9f3030;
   --alert-line: rgba(196, 71, 71, 0.35);
+  --export-points: #99a4da;
+  --export-tracks: #89eae9;
+  /* Colores por estación (mapa, panel y grupos de la tabla); legibles en tema claro y oscuro */
+  --estacion-1: #3a86c8;
+  --estacion-2: #e08a2c;
+  --estacion-3: #8e5bb5;
+  --estacion-4: #d1487a;
+  --estacion-5: #c9a21c;
+  --estacion-6: #2a9d8f;
+  --estacion-7: #a0522d;
+  --estacion-8: #5c6bc0;
 }
 
 :root[data-theme="dark"] {
@@ -327,6 +338,22 @@ pre code {
   color: var(--sea-ink-soft);
 }
 
+.demo-button-points,
+.demo-button-tracks {
+  --export-color: var(--export-points);
+  border-color: color-mix(in oklab, var(--export-color) 70%, var(--line));
+  background: color-mix(in oklab, var(--export-color) 38%, var(--surface-strong));
+}
+
+.demo-button-tracks {
+  --export-color: var(--export-tracks);
+}
+
+.demo-button-points:hover,
+.demo-button-tracks:hover {
+  background: color-mix(in oklab, var(--export-color) 52%, var(--surface-strong));
+}
+
 .demo-button-danger {
   border-color: rgba(196, 71, 71, 0.28);
   background: rgba(196, 71, 71, 0.1);
@@ -468,6 +495,9 @@ pre code {
 .demo-table td.sticky-col-after-check { left: 2.75rem; }
 .sticky-col-name { border-right: 1px solid var(--line); }
 .assign-input { min-width: 9rem; padding: 0.45rem 0.55rem; }
+.estacion-dot { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; flex-shrink: 0; }
+.demo-table tr.group-row td { background: var(--foam); font-weight: 700; }
+.group-row-label { display: inline-flex; align-items: center; gap: 0.5rem; }
 .quantity-input { min-width: 5rem; padding: 0.45rem; }
 .utm-zone-control { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--sea-ink-soft); font-size: 0.85rem; font-weight: 700; }
 .utm-zone-select { width: auto; min-width: 5rem; padding: 0.5rem 0.65rem; }
