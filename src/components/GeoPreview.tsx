@@ -9,6 +9,8 @@ import EstacionesPanel from '#/components/EstacionesPanel'
 import PointsTable, { type PointGroup } from '#/components/PointsTable'
 import { estacionColor } from '#/lib/estaciones'
 import { formatCoordinate } from '#/lib/format'
+import { SUGGESTERS } from '#/lib/suggest'
+import type { EstacionSuggestion } from '#/lib/suggest/types'
 import { formatUtm, toUtm, type UtmZone } from '#/lib/utm'
 
 const W = 800
@@ -16,7 +18,7 @@ const H = 480
 const PAD = 24
 const NO_ESTACION = '__none__'
 
-export default function GeoPreview({ data }: { data: ImportResult }) {
+export default function GeoPreview({ data, onClear }: { data: ImportResult; onClear(): void }) {
   const [selectedSpecies, setSelectedSpecies] = useState<Record<number, Species>>({})
   const [quantities, setQuantities] = useState<Record<number, number>>({})
   const [meta, setMeta] = useState<CsvMeta>({ estacion: '', terreno: '', protocolo: '', metodologia: '' })
@@ -26,7 +28,7 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
   const [trackNames, setTrackNames] = useState<Record<number, string>>({})
   const [utmZone, setUtmZone] = useState<UtmZone>(19)
   const [removedPoints, setRemovedPoints] = useState<Set<number>>(() => new Set())
-  const { estaciones, create: createEstacion, update: updateEstacion, remove: removeEstacion, assign, unassign, getEstacionOf, pointsOfEstacion } = useEstaciones()
+  const { estaciones, create: createEstacion, createWithPoints, update: updateEstacion, remove: removeEstacion, assign, unassign, getEstacionOf, pointsOfEstacion } = useEstaciones()
   const [assignTarget, setAssignTarget] = useState('')
   const estacionCounts = Object.fromEntries(estaciones.map((e) => [e.id, pointsOfEstacion(e.id).filter((index) => !removedPoints.has(index)).length]))
   const visiblePoints = data.points.filter((_, index) => !removedPoints.has(index))
@@ -40,6 +42,39 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
       if (!next.delete(index)) next.add(index)
       return next
     })
+  }
+
+  // Descarga el archivo: la página padre desmonta este componente y con él todas las ediciones.
+  function clearData() {
+    if (window.confirm('¿Limpiar todo? Se cierra el archivo y se pierden las ediciones (especies, estaciones, nombres, puntos quitados).')) onClear()
+  }
+
+  function suggestEstaciones(): EstacionSuggestion[] {
+    const unassigned = visibleIndexes.filter((index) => !getEstacionOf(index))
+    // Los tracks se evalúan con el nombre que el usuario les haya puesto en la tabla.
+    const named = { ...data, tracks: data.tracks.map((track, index) => ({ ...track, name: trackNames[index]?.trim() || track.name })) }
+    const merged = new Map<string, EstacionSuggestion>()
+    for (const suggestion of SUGGESTERS.flatMap((suggester) => suggester.suggest(named, unassigned))) {
+      const key = suggestion.nombre.toLowerCase()
+      const previous = merged.get(key)
+      merged.set(key, previous ? {
+        nombre: previous.nombre,
+        protocolo: previous.protocolo ?? suggestion.protocolo,
+        trackIndex: previous.trackIndex ?? suggestion.trackIndex,
+        points: [...new Set([...previous.points, ...suggestion.points])],
+      } : suggestion)
+    }
+    // Una estación ya creada con ese nombre y sin puntos nuevos que sumar no aporta nada.
+    return [...merged.values()].filter((suggestion) => suggestion.points.length > 0 || !estaciones.some((e) => e.nombre.trim().toLowerCase() === suggestion.nombre.toLowerCase()))
+  }
+
+  // Si ya existe una estación con ese nombre, los puntos se suman a ella en vez de duplicarla.
+  function applySuggestions(selected: EstacionSuggestion[]) {
+    for (const suggestion of selected) {
+      const existing = estaciones.find((e) => e.nombre.trim().toLowerCase() === suggestion.nombre.toLowerCase())
+      if (existing) assign(existing.id, suggestion.points)
+      else createWithPoints(suggestion.nombre, suggestion.protocolo ?? '', suggestion.points, suggestion.trackIndex)
+    }
   }
 
   function applyAssign() {
@@ -207,6 +242,9 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
           <button type="button" className="demo-button demo-button-points" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone, trackNames)}>
             Exportar KMZ
           </button>
+          <button type="button" className="demo-button alert" onClick={clearData}>
+            Limpiar datos
+          </button>
         </div>
 
         <div className="demo-list-item grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -238,6 +276,8 @@ export default function GeoPreview({ data }: { data: ImportResult }) {
           onCreate={() => createEstacion()}
           onUpdate={updateEstacion}
           onRemove={removeEstacion}
+          onSuggest={suggestEstaciones}
+          onApplySuggestions={applySuggestions}
         />
 
         {checkedIndexes.length > 0 && (

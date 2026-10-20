@@ -15,7 +15,12 @@ export function useEstaciones() {
     dispatch({ type: 'create', estacion: newEstacion(id, nombre, protocolo) })
     return id
   }, [])
-  const update = useCallback((id: string, patch: { nombre?: string; protocolo?: string }) => dispatch({ type: 'update', id, patch }), [])
+  const createWithPoints = useCallback((nombre: string, protocolo: string, points: number[], trackIndex?: number) => {
+    const id = crypto.randomUUID()
+    dispatch({ type: 'create', estacion: { ...newEstacion(id, nombre, protocolo), trackIndex } })
+    dispatch({ type: 'assign', id, points })
+  }, [])
+  const update =useCallback((id: string, patch: { nombre?: string; protocolo?: string }) => dispatch({ type: 'update', id, patch }), [])
   const remove = useCallback((id: string) => dispatch({ type: 'remove', id }), [])
   const assign = useCallback((id: string, points: number[]) => dispatch({ type: 'assign', id, points }), [])
   const unassign = useCallback((points: number[]) => dispatch({ type: 'unassign', points }), [])
@@ -29,5 +34,5 @@ export function useEstaciones() {
   )
   const pointsOfEstacion = useCallback((id: string) => pointsOf(state, id), [state])
 
-  return { estaciones: state.estaciones, create, update, remove, assign, unassign, getEstacionOf, pointsOfEstacion }
+  return { estaciones: state.estaciones, create, createWithPoints, update, remove, assign, unassign, getEstacionOf, pointsOfEstacion }
 }
