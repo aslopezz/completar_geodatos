@@ -34,15 +34,23 @@ function ImportPage() {
       </p>
 
       <div className="demo-panel mb-6">
-        <input
-          type="file"
-          accept=".kml,.kmz,.gpx"
-          className="demo-input"
-          onChange={(e) => {
-            handleFile(e.target.files?.[0])
-            e.target.value = ''
-          }}
-        />
+        <label className="demo-input file-picker">
+          <svg className="file-picker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 16V4" />
+            <path d="m7 9 5-5 5 5" />
+            <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+          </svg>
+          <span>Elegir archivo KML, KMZ o GPX</span>
+          <input
+            type="file"
+            accept=".kml,.kmz,.gpx"
+            className="sr-only"
+            onChange={(e) => {
+              handleFile(e.target.files?.[0])
+              e.target.value = ''
+            }}
+          />
+        </label>
         {loading && <p className="demo-muted mt-3 mb-0 text-sm">Leyendo…</p>}
         {error && <p className="demo-alert demo-alert-danger mt-3 mb-0 text-sm">{error}</p>}
       </div>
@@ -50,7 +58,7 @@ function ImportPage() {
       {result && (
         <>
           <h2 className="demo-section-title mb-3">{result.fileName}</h2>
-          <GeoPreview data={result} />
+          <GeoPreview data={result} onClear={() => { setResult(null); setError(null) }} />
         </>
       )}
     </main>

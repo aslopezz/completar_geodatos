@@ -6,5 +6,7 @@
   "main": "@tanstack/react-start/server-entry",
   "observability": {
     "enabled": true
-  }
+  },
+  // Requerido por `wrangler preview` (deploy de ramas que no son producción)
+  "previews": {}
 }
