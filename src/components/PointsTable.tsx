@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { GeoPoint } from '#/lib/geo-import'
-import type { PointOverride } from '#/lib/geo-export'
+import type { PointOverride } from '#/lib/point-attributes'
 import { formatCoordinate, formatTimestampPart } from '#/lib/format'
 import { searchSpecies, speciesLabel, type Species } from '#/lib/species'
 import { formatUtm, toUtm, type UtmZone } from '#/lib/utm'
