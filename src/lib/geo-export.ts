@@ -1,9 +1,7 @@
 import { strToU8, zipSync } from 'fflate'
 import { trackLengthKm, type ImportResult, type LngLat } from '#/lib/geo-import'
-import type { Estacion } from '#/lib/estaciones'
-import { resolvePointAttributes } from '#/lib/point-attributes'
-import { findProtocolo } from '#/lib/protocolos'
-import { speciesLabel, type Species } from '#/lib/species'
+import type { ExportPoint } from '#/lib/point-attributes'
+import { speciesLabel } from '#/lib/species'
 import { toUtm, type UtmZone } from '#/lib/utm'
 
 function xml(value: string): string {
@@ -14,16 +12,15 @@ function coordinate([lng, lat]: LngLat): string {
   return `${lng},${lat}`
 }
 
-export function exportKmz(data: ImportResult, points: number[], species: Record<number, Species>, quantities: Record<number, number>, zone: UtmZone, trackNames: Record<number, string> = {}) {
-  const pointPlacemarks = points.map((index) => {
-    const point = data.points[index]
-    const selected = species[index]
+export function exportKmz(data: ImportResult, points: ExportPoint[], zone: UtmZone, trackNames: Record<number, string> = {}) {
+  const pointPlacemarks = points.map((point) => {
+    const selected = point.species
     const utm = toUtm(point.coord, zone)
     const timestamp = point.timestamp && !Number.isNaN(Date.parse(point.timestamp))
       ? `<TimeStamp><when>${xml(point.timestamp)}</when></TimeStamp>` : ''
     const details = [selected && `Especie: ${speciesLabel(selected)}${selected.fuente === 'gbif' ? ' (GBIF)' : ''}`, selected?.nombre_comun_terreno && `Nombre común: ${selected.nombre_comun_terreno}`]
       .filter(Boolean).join('\n')
-    const speciesData = `<ExtendedData><Data name="cantidad"><value>${quantities[index] ?? 1}</value></Data><Data name="utm_zona"><value>${zone}S</value></Data><Data name="utm_este_m"><value>${utm.easting.toFixed(3)}</value></Data><Data name="utm_norte_m"><value>${utm.northing.toFixed(3)}</value></Data>${selected ? [
+    const speciesData = `<ExtendedData><Data name="cantidad"><value>${point.cantidad}</value></Data><Data name="utm_zona"><value>${zone}S</value></Data><Data name="utm_este_m"><value>${utm.easting.toFixed(3)}</value></Data><Data name="utm_norte_m"><value>${utm.northing.toFixed(3)}</value></Data>${selected ? [
           ['nombre_cientifico', speciesLabel(selected)],
           ['nombre_comun', selected.nombre_comun_terreno],
           ['fuente_especie', selected.fuente],
@@ -79,53 +76,35 @@ export function exportTracksCsv(data: ImportResult, zone: UtmZone, trackNames: R
   download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${baseName(data.fileName)}_tracks.csv`)
 }
 
-export type PointOverride = { estacion?: string; protocolo?: string; metodologia?: string }
-
-export function metodologiaFor(protocolo: string | undefined): string {
-  return findProtocolo(protocolo)?.sigla ?? ''
-}
-
-// Al cambiar de protocolo: usa la sigla del nuevo; si la actual era la autocompletada del
-// protocolo anterior la limpia, y si fue escrita a mano la respeta.
-export function nextMetodologia(prevProtocolo: string | undefined, newProtocolo: string, current: string): string {
-  const mapped = metodologiaFor(newProtocolo)
-  if (mapped) return mapped
-  return current === metodologiaFor(prevProtocolo) ? '' : current
-}
-
-export type CsvMeta = { estacion: string; terreno: string; protocolo: string; metodologia: string }
-
 // Formato que lee la app Shiny (aslopezz/graficos_eco): separador ";", UTF-8,
 // nombres de columna tal cual, FECHA dd-mm-YYYY y COORDENADAS como "lat, lon".
 // Una fila por punto; los puntos sin especie salen con las columnas de especie vacías.
-export function exportCsv(data: ImportResult, points: number[], species: Record<number, Species>, quantities: Record<number, number>, meta: CsvMeta, overrides: Record<number, PointOverride> = {}, getEstacionOf?: (index: number) => Estacion | undefined) {
+export function exportCsv(fileName: string, points: ExportPoint[], terreno: string) {
   const headers = ['TERRENO', 'ESTACION', 'PROTOCOLO MUESTREO', 'NOMBRE METODOLOGIA', 'FECHA', 'HORA', 'COORDENADAS', 'REINO', 'FILO', 'CLASE', 'ORDEN', 'FAMILIA', 'GENERO', 'EPITETO ESPECIFICO', 'NOMBRE COMUN', 'CANTIDAD', 'CATEGORIA CONSERVACION', 'DECRETO', 'FUENTE ESPECIE']
   const rows: string[][] = [headers]
-  for (const index of points) {
-    const selected: Species | undefined = species[index]
-    const point = data.points[index]
+  for (const point of points) {
+    const selected = point.species
     const date = point.timestamp ? new Date(point.timestamp) : null
     const validDate = date && !Number.isNaN(date.getTime()) ? date : null
     const [genus, epithet] = (selected ? speciesLabel(selected) : '').split(' ')
-    const attrs = resolvePointAttributes(point.name, meta, overrides[index], getEstacionOf?.(index))
     rows.push([
-      meta.terreno,
-      attrs.estacion,
-      attrs.protocolo,
-      attrs.metodologia,
+      terreno,
+      point.estacion,
+      point.protocolo,
+      point.metodologia,
       validDate ? validDate.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '',
       validDate?.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false }) ?? '',
       `${point.coord[1]}, ${point.coord[0]}`,
       selected?.kingdom ?? '', selected?.phylum ?? '', selected?.class ?? '', selected?.order ?? '', selected?.family ?? '',
       selected?.genero ?? genus ?? '', selected?.epiteto_especifico ?? epithet ?? '',
       selected?.nombre_comun_terreno ?? '',
-      String(quantities[index] ?? 1),
+      String(point.cantidad),
       selected?.categoria_conservacion ?? '', selected?.decreto ?? '', selected?.fuente ?? '',
     ])
   }
   // Sin BOM: la app lee con read.csv(encoding = "UTF-8") y el BOM ensuciaría el nombre de la primera columna.
   const csv = rows.map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(';')).join('\r\n')
-  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${baseName(data.fileName)}.csv`)
+  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `${baseName(fileName)}.csv`)
 }
 
 function baseName(fileName: string): string {
@@ -133,7 +112,7 @@ function baseName(fileName: string): string {
   return name.toLocaleUpperCase('en').startsWith('ECO_') ? name : `ECO_${name}`
 }
 
-function download(blob: Blob, fileName: string) {
+export function download(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

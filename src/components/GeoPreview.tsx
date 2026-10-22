@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { trackLengthKm, type ImportResult, type LngLat } from '#/lib/geo-import'
 import type { Species } from '#/lib/species'
-import { exportCsv, exportKmz, exportTracksCsv,metodologiaFor, nextMetodologia, type CsvMeta, type PointOverride } from '#/lib/geo-export'
+import { exportCsv, exportKmz, exportTracksCsv } from '#/lib/geo-export'
 import { getProtocolos } from '#/lib/protocolos'
-import { resolvePointAttributes } from '#/lib/point-attributes'
+import { metodologiaFor, nextMetodologia, resolvePointAttributes, resolvePoints, type CsvMeta, type PointOverride } from '#/lib/point-attributes'
 import { useEstaciones } from '#/hooks/useEstaciones'
 import EstacionesPanel from '#/components/EstacionesPanel'
 import PointsTable, { type PointGroup } from '#/components/PointsTable'
@@ -35,6 +35,8 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
   const visibleIndexes = data.points.map((_, index) => index).filter((index) => !removedPoints.has(index))
   const checkedIndexes = visibleIndexes.filter((index) => checked.has(index))
   const allChecked = visibleIndexes.length > 0 && checkedIndexes.length === visibleIndexes.length
+
+  const exportPoints = () => resolvePoints(data, { removed: removedPoints, species: selectedSpecies, quantities, overrides, meta, getEstacionOf })
 
   function toggleChecked(index: number) {
     setChecked((current) => {
@@ -231,7 +233,7 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
               <option value={19}>19S</option>
             </select>
           </label>
-          <button type="button" className="demo-button demo-button-points" onClick={() => exportCsv(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, meta, overrides, getEstacionOf)}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => exportCsv(data.fileName, exportPoints(), meta.terreno)}>
             Exportar CSV puntos
           </button>
            {data.tracks.length > 0 && (
@@ -239,7 +241,7 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
               Exportar CSV tracks
             </button>
           )}
-          <button type="button" className="demo-button demo-button-points" onClick={() => exportKmz(data, data.points.map((_, index) => index).filter((index) => !removedPoints.has(index)), selectedSpecies, quantities, utmZone, trackNames)}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => exportKmz(data, exportPoints(), utmZone, trackNames)}>
             Exportar KMZ
           </button>
           <button type="button" className="demo-button alert" onClick={clearData}>
