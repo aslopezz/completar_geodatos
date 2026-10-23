@@ -18,3 +18,8 @@ supabase/*
 GLOSSARY.md
 SCHEMA.md
 *.csv
+.vscode/
+.agents/
+.claude/
+# Plantilla oficial SMA que usa la herramienta (sí va al repo)
+!src/assets/sma/*.xlsx
