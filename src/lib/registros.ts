@@ -44,25 +44,37 @@ function trimStrings<T extends object>(row: T): T {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])) as T
 }
 
-// Trae todos los registros, paginando de a PAGE_SIZE.
+async function fetchPage(from: number, withCount: boolean) {
+  const { data, error, count } = await getSupabase()
+    .from(REGISTROS_VIEW)
+    .select(COLUMNS, withCount ? { count: 'exact' } : undefined)
+    .order('id_registro')
+    .range(from, from + PAGE_SIZE - 1)
+  if (error) throw new Error(`No se pudieron cargar los registros: ${error.message}`)
+  return { rows: data as Registro[], count }
+}
+
+// lat/lon pueden llegar como texto si la vista los castea a numeric; se normalizan a número.
+function normalize(row: Registro): Registro {
+  const lat = row.lat == null ? NaN : Number(row.lat)
+  const lon = row.lon == null ? NaN : Number(row.lon)
+  return { ...trimStrings(row), lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null }
+}
+
+// Trae todos los registros de a PAGE_SIZE. La primera página trae también el total,
+// y el resto de las páginas se piden todas a la vez en vez de una tras otra.
 export async function fetchRegistros(): Promise<Registro[]> {
-  const supabase = getSupabase()
-  const rows: Registro[] = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from(REGISTROS_VIEW)
-      .select(COLUMNS)
-      .order('id_registro')
-      .range(from, from + PAGE_SIZE - 1)
-    if (error) throw new Error(`No se pudieron cargar los registros: ${error.message}`)
-    // lat/lon pueden llegar como texto si la vista los castea a numeric; se normalizan a número.
-    for (const row of data as Registro[]) {
-      const lat = row.lat == null ? NaN : Number(row.lat)
-      const lon = row.lon == null ? NaN : Number(row.lon)
-      rows.push({ ...trimStrings(row), lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null })
-    }
-    if (data.length < PAGE_SIZE) return rows
+  const first = await fetchPage(0, true)
+  const pages = [first]
+  if (first.count != null) {
+    const rest = []
+    for (let from = PAGE_SIZE; from < first.count; from += PAGE_SIZE) rest.push(fetchPage(from, false))
+    pages.push(...(await Promise.all(rest)))
+  } else {
+    // Sin total (no debería pasar): una página tras otra hasta que llegue una incompleta.
+    for (let from = PAGE_SIZE; pages[pages.length - 1].rows.length === PAGE_SIZE; from += PAGE_SIZE) pages.push(await fetchPage(from, false))
   }
+  return pages.flatMap((page) => page.rows.map(normalize))
 }
 
 const CACHE_TTL_MS = 5 * 60 * 1000
