@@ -17,3 +17,4 @@ supabase/*
 *.xlsx
 GLOSSARY.md
 SCHEMA.md
+*.csv
