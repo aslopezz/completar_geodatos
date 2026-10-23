@@ -17,9 +17,31 @@ export type PointSessionState = {
   edits: Record<number, PointEdit>
   removed: ReadonlySet<number>
   terreno: string
+  sma: SmaDatos
 }
 
-export const initialPointSession: PointSessionState = { estaciones: [], pointEstacion: {}, edits: {}, removed: new Set(), terreno: '' }
+// Lo que pide la planilla SMA y el archivo no trae. Se llena una vez por archivo, salvo el tipo de monitoreo (por estación).
+export type SmaDatos = {
+  objetivo: string
+  comentarios: string
+  muestreadoPor: string // también va como "Identificado por"
+  comuna: string // región y provincia salen de la comuna (src/lib/sma/comunas.ts)
+  localidad: string
+  ecosistema1: string
+  ecosistema2: string
+  tipoRegistro: string
+  tipoMonitoreo: Record<string, string> // por nombre de estación en minúsculas; lo que falta se propone desde el protocolo
+}
+
+export const initialSmaDatos: SmaDatos = {
+  objetivo: '', comentarios: '', muestreadoPor: '',
+  comuna: '', localidad: '', ecosistema1: '', ecosistema2: '',
+  tipoRegistro: 'Observación directa', tipoMonitoreo: {},
+}
+
+export const initialPointSession: PointSessionState = {
+  estaciones: [], pointEstacion: {}, edits: {}, removed: new Set(), terreno: '', sma: initialSmaDatos,
+}
 
 // Los ids los genera quien llama (el reducer es puro: sin crypto ni fechas).
 export type PointSessionAction =
@@ -36,6 +58,8 @@ export type PointSessionAction =
   | { type: 'removePoint'; index: number }
   | { type: 'restorePoints' }
   | { type: 'setTerreno'; terreno: string }
+  | { type: 'setSma'; patch: Partial<Omit<SmaDatos, 'tipoMonitoreo'>> }
+  | { type: 'setTipoMonitoreo'; estacion: string; tipo: string } // tipo vacío = volver al propuesto
 
 export function pointSessionReducer(state: PointSessionState, action: PointSessionAction): PointSessionState {
   switch (action.type) {
@@ -89,6 +113,13 @@ export function pointSessionReducer(state: PointSessionState, action: PointSessi
       return { ...state, removed: new Set() }
     case 'setTerreno':
       return { ...state, terreno: action.terreno }
+    case 'setSma':
+      return { ...state, sma: { ...state.sma, ...action.patch } }
+    case 'setTipoMonitoreo': {
+      const { [estacionKey(action.estacion)]: _, ...tipoMonitoreo } = state.sma.tipoMonitoreo
+      if (action.tipo) tipoMonitoreo[estacionKey(action.estacion)] = action.tipo
+      return { ...state, sma: { ...state.sma, tipoMonitoreo } }
+    }
   }
 }
 
@@ -98,9 +129,12 @@ function editPoints(state: PointSessionState, points: number[], update: (edit: P
   return { ...state, edits }
 }
 
+export const estacionKey = (nombre: string) => nombre.trim().toLowerCase()
+
+// Única regla para comparar nombres de estación (sesión y planilla SMA): sin espacios a los lados ni mayúsculas.
 export function findEstacionByName(estaciones: Estacion[], nombre: string): Estacion | undefined {
-  const key = nombre.trim().toLowerCase()
-  return estaciones.find((e) => e.nombre.trim().toLowerCase() === key)
+  const key = estacionKey(nombre)
+  return estaciones.find((e) => estacionKey(e.nombre) === key)
 }
 
 export function estacionOf(state: PointSessionState, index: number): Estacion | undefined {

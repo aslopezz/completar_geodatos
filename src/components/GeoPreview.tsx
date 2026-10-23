@@ -1,7 +1,7 @@
 import { useMemo, useReducer, useState } from 'react'
 import type { ImportResult, LngLat } from '#/lib/geo-import'
 import { download } from '#/lib/export-file'
-import { exportCsv, exportKmz, exportTracksCsv, trackSummary } from '#/lib/geo-export'
+import { exportCsv, exportKmz, exportTracksCsv, trackName, trackSummary } from '#/lib/geo-export'
 import { exportDarwinCore, withSpecies } from '#/lib/darwin-core'
 import { getProtocolos } from '#/lib/protocolos'
 import {
@@ -16,6 +16,7 @@ import {
 } from '#/lib/point-session'
 import EstacionesPanel from '#/components/EstacionesPanel'
 import PointsTable from '#/components/PointsTable'
+import SmaDialog from '#/components/SmaDialog'
 import { formatCoordinate } from '#/lib/format'
 import { suggestEstaciones } from '#/lib/suggest'
 import type { EstacionSuggestion } from '#/lib/suggest/types'
@@ -33,14 +34,20 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
   const [trackNames, setTrackNames] = useState<Record<number, string>>({})
   const [utmZone, setUtmZone] = useState<UtmZone>(19)
   const [assignTarget, setAssignTarget] = useState('')
+  const [smaOpen, setSmaOpen] = useState(false)
   const { estaciones, removed } = session
   const visibleIndexes = useMemo(() => visibleIndexesOf(data, removed), [data, removed])
   const visiblePoints = useMemo(() => visibleIndexes.map((index) => data.points[index]), [data, visibleIndexes])
   const checkedIndexes = visibleIndexes.filter((index) => checked.has(index))
   const allChecked = visibleIndexes.length > 0 && checkedIndexes.length === visibleIndexes.length
 
-  const exportPoints = () => resolvePoints(data, session)
-  const conEspecie = withSpecies(exportPoints()).length
+  // Puntos resueltos y tracks con su nombre: se calculan una vez por cambio, no en cada render.
+  const exportPoints = useMemo(() => resolvePoints(data, session), [data, session])
+  const conEspecie = useMemo(() => withSpecies(exportPoints).length, [exportPoints])
+  const smaExtras = useMemo(
+    () => ({ estaciones, tracks: data.tracks.map((track, index) => ({ nombre: trackName(track, index, trackNames), coords: track.coords })) }),
+    [estaciones, data.tracks, trackNames],
+  )
 
   function toggleChecked(index: number) {
     setChecked((current) => {
@@ -168,7 +175,7 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
               <option value={19}>19S</option>
             </select>
           </label>
-          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportCsv(data.fileName, exportPoints(), session.terreno))}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportCsv(data.fileName, exportPoints, session.terreno))}>
             Exportar CSV puntos
           </button>
           <button
@@ -176,16 +183,29 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
             className="demo-button demo-button-points"
             disabled={conEspecie === 0}
             title="Solo los puntos con especie elegida de la lista"
-            onClick={() => download(exportDarwinCore(data.fileName, exportPoints(), session.terreno))}
+            onClick={() => download(exportDarwinCore(data.fileName, exportPoints, session.terreno))}
           >
             Exportar Darwin Core ({conEspecie})
           </button>
+          <button type="button" className="demo-button demo-button-points" disabled={conEspecie === 0} title="Solo los puntos con especie" onClick={() => setSmaOpen(true)}>
+            Exportar planilla SMA ({conEspecie})
+          </button>
+          <SmaDialog
+            open={smaOpen}
+            onClose={() => setSmaOpen(false)}
+            fileName={data.fileName}
+            terreno={session.terreno}
+            sma={session.sma}
+            points={exportPoints}
+            extras={smaExtras}
+            dispatch={dispatch}
+          />
            {data.tracks.length > 0 && (
             <button type="button" className="demo-button demo-button-tracks" onClick={() => download(exportTracksCsv(data, utmZone, trackNames))}>
               Exportar CSV tracks
             </button>
           )}
-          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportKmz(data, exportPoints(), utmZone, trackNames))}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportKmz(data, exportPoints, utmZone, trackNames))}>
             Exportar KMZ
           </button>
           <button type="button" className="demo-button alert" onClick={clearData}>

@@ -41,6 +41,13 @@
   --estacion-6: #2a9d8f;
   --estacion-7: #a0522d;
   --estacion-8: #5c6bc0;
+  /* Fondo detrás de las ventanas (dialog) y su sombra */
+  --backdrop: rgba(23, 58, 64, 0.38);
+  --dialog-shadow: 0 24px 60px rgba(23, 58, 64, 0.25);
+  /* Esquinas de paneles y ventanas */
+  --radius-panel: 1.25rem;
+  /* Margen interior y separación de secciones en las ventanas */
+  --space-dialog: 1.25rem;
 }
 
 :root[data-theme="dark"] {
@@ -66,6 +73,8 @@
   --alert-bg: #4a1c20;
   --alert-text: #f5c6cb;
   --alert-line: rgba(245, 198, 203, 0.3);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --dialog-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -92,6 +101,8 @@
     --alert-bg: #4a1c20;
     --alert-text: #f5c6cb;
     --alert-line: rgba(245, 198, 203, 0.3);
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --dialog-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -242,13 +253,58 @@ pre code {
 }
 
 .demo-panel {
-  border-radius: 1.25rem;
+  border-radius: var(--radius-panel);
   padding: clamp(1.25rem, 4vw, 2rem);
 }
 
 .demo-card {
   border-radius: 1rem;
   padding: 1rem;
+}
+
+/* Ventana modal: encabezado y pie fijos, el contenido se desplaza.
+   Ancho y alto son medidas propias de esta ventana (no se repiten en otro lado), por eso van sin variable. */
+.demo-dialog {
+  width: min(40rem, calc(100% - 2rem));
+  max-height: min(90vh, 52rem);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--surface-strong);
+  color: var(--sea-ink);
+  box-shadow: var(--dialog-shadow);
+}
+
+.demo-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-dialog::backdrop {
+  background: var(--backdrop);
+  backdrop-filter: blur(2px);
+}
+
+.demo-dialog-header,
+.demo-dialog-footer {
+  padding: 1rem var(--space-dialog);
+}
+
+.demo-dialog-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.demo-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-dialog);
+  overflow-y: auto;
+  padding: var(--space-dialog);
+}
+
+.demo-dialog-footer {
+  border-top: 1px solid var(--line);
 }
 
 .demo-title {
