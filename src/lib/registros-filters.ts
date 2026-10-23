@@ -1,4 +1,4 @@
-import { download } from '#/lib/geo-export'
+import { csvFile, type ExportFile } from '#/lib/export-file'
 import { especieLabel, type Registro } from '#/lib/registros'
 
 export const TAXONOMY = [
@@ -87,14 +87,6 @@ const CSV_COLUMNS: [string, (r: Registro) => string | number | null][] = [
   ['Endémica', endemicaOf],
 ]
 
-// Evita que Excel interprete como fórmula un texto de terreno que empiece con = + - @.
-const csvCell = (value: string | number | null) => {
-  const text = String(value ?? '')
-  return `"${(/^[=+\-@]/.test(text) && Number.isNaN(Number(text)) ? `'${text}` : text).replace(/"/g, '""')}"`
-}
-
-// Mismo formato que los CSV de la app: ";" y UTF-8 sin BOM.
-export function exportRegistrosCsv(rows: Registro[]) {
-  const lines = [CSV_COLUMNS.map(([name]) => csvCell(name)), ...rows.map((r) => CSV_COLUMNS.map(([, get]) => csvCell(get(r))))]
-  download(new Blob([lines.map((l) => l.join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'registros.csv')
+export function exportRegistrosCsv(rows: Registro[]): ExportFile {
+  return csvFile([CSV_COLUMNS.map(([name]) => name), ...rows.map((r) => CSV_COLUMNS.map(([, get]) => get(r)))], 'registros.csv')
 }

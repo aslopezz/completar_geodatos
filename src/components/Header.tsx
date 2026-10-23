@@ -29,6 +29,13 @@ export default function Header() {
             Registros
           </Link>
           <Link
+            to="/proyectos"
+            className="nav-link"
+            activeProps={{ className: 'nav-link is-active' }}
+          >
+            Proyectos
+          </Link>
+          <Link
             to="/mapa"
             className="nav-link"
             activeProps={{ className: 'nav-link is-active' }}

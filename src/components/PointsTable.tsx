@@ -1,40 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Dispatch } from 'react'
 import type { GeoPoint } from '#/lib/geo-import'
-import type { PointOverride } from '#/lib/point-attributes'
+import { estacionOf, inheritedAttributes, pointEdit, type PointGroup, type PointSessionAction, type PointSessionState } from '#/lib/point-session'
 import { formatCoordinate, formatTimestampPart } from '#/lib/format'
 import { searchSpecies, speciesLabel, type Species } from '#/lib/species'
 import { formatUtm, toUtm, type UtmZone } from '#/lib/utm'
-
-// label null = tabla sin agrupar (no hay estaciones): no se dibuja fila de encabezado.
-export type PointGroup = { key: string; label: string | null; color?: string; indexes: number[] }
-
-type Placeholders = { estacion: string; protocolo: string; metodologia: string }
 
 type Props = {
   points: GeoPoint[]
   groups: PointGroup[]
   utmZone: UtmZone
+  session: PointSessionState
+  dispatch: Dispatch<PointSessionAction>
   checked: Set<number>
   allChecked: boolean
-  overrides: Record<number, PointOverride>
-  species: Record<number, Species>
-  quantities: Record<number, number>
-  placeholdersFor(index: number): Placeholders
   onToggle(index: number): void
   onToggleAll(): void
-  onOverride(index: number, patch: PointOverride): void
-  onProtocolo(index: number, value: string): void
-  onSelectSpecies(index: number, species: Species): void
-  onQuantity(index: number, value: number): void
-  onRemove(index: number): void
 }
 
 const COLUMNS = 12
 
-export default function PointsTable({
-  points, groups, utmZone, checked, allChecked, overrides, species, quantities,
-  placeholdersFor, onToggle, onToggleAll, onOverride, onProtocolo, onSelectSpecies, onQuantity, onRemove,
-}: Props) {
+export default function PointsTable({ points, groups, utmZone, session, dispatch, checked, allChecked, onToggle, onToggleAll }: Props) {
   return (
     <div className="demo-table-shell max-h-96 overflow-auto">
       <table className="demo-table text-sm whitespace-nowrap">
@@ -51,7 +36,8 @@ export default function PointsTable({
             <GroupRows key={group.key} group={group}>
               {group.indexes.map((index) => {
                 const point = points[index]
-                const placeholders = placeholdersFor(index)
+                const edit = pointEdit(session, index)
+                const inherited = inheritedAttributes(session, index, point.name)
                 return (
                   <tr key={`p${index}`}>
                     <td className="sticky-col sticky-col-check">
@@ -63,35 +49,34 @@ export default function PointsTable({
                     <td className="demo-muted">{point.timestamp ? formatTimestampPart(point.timestamp, 'date') : '—'}</td>
                     <td className="demo-muted">{point.timestamp ? formatTimestampPart(point.timestamp, 'time') : '—'}</td>
                     <td>
-                      <input
-                        className="demo-input assign-input"
-                        value={overrides[index]?.estacion ?? ''}
-                        placeholder={placeholders.estacion}
-                        aria-label={`Estación de ${point.name}`}
-                        onChange={(event) => onOverride(index, { estacion: event.target.value })}
+                      <EstacionInput
+                        value={estacionOf(session, index)?.nombre ?? ''}
+                        placeholder={point.name}
+                        label={`Estación de ${point.name}`}
+                        onCommit={(nombre) => dispatch({ type: 'assignByName', nombre, points: [index], newId: crypto.randomUUID() })}
                       />
                     </td>
                     <td>
                       <input
                         className="demo-input assign-input"
                         list="protocolos-muestreo"
-                        value={overrides[index]?.protocolo ?? ''}
-                        placeholder={placeholders.protocolo}
+                        value={edit.protocolo ?? ''}
+                        placeholder={inherited.protocolo || 'Protocolo'}
                         aria-label={`Protocolo de ${point.name}`}
-                        onChange={(event) => onProtocolo(index, event.target.value)}
+                        onChange={(event) => dispatch({ type: 'setProtocolo', points: [index], protocolo: event.target.value })}
                       />
                     </td>
                     <td>
                       <input
                         className="demo-input assign-input"
-                        value={overrides[index]?.metodologia ?? ''}
-                        placeholder={placeholders.metodologia}
+                        value={edit.metodologia ?? ''}
+                        placeholder={inherited.metodologia || 'Sigla'}
                         aria-label={`Metodología de ${point.name}`}
-                        onChange={(event) => onOverride(index, { metodologia: event.target.value })}
+                        onChange={(event) => dispatch({ type: 'setMetodologia', points: [index], metodologia: event.target.value })}
                       />
                     </td>
                     <td className="species-cell">
-                      <SpeciesPicker value={species[index]} onSelect={(selected) => onSelectSpecies(index, selected)} />
+                      <SpeciesPicker value={edit.species} onSelect={(species) => dispatch({ type: 'setSpecies', index, species })} />
                     </td>
                     <td>
                       <input
@@ -99,9 +84,9 @@ export default function PointsTable({
                         type="number"
                         min="1"
                         step="1"
-                        value={quantities[index] ?? 1}
+                        value={edit.cantidad ?? 1}
                         aria-label={`Cantidad para ${point.name}`}
-                        onChange={(event) => onQuantity(index, Number(event.target.value))}
+                        onChange={(event) => dispatch({ type: 'setCantidad', index, cantidad: Number(event.target.value) })}
                       />
                     </td>
                     <td>
@@ -109,7 +94,7 @@ export default function PointsTable({
                         type="button"
                         className="demo-button alert demo-button-secondary point-remove"
                         aria-label={`Quitar punto ${point.name}`}
-                        onClick={() => onRemove(index)}
+                        onClick={() => dispatch({ type: 'removePoint', index })}
                       >
                         Quitar
                       </button>
@@ -140,6 +125,25 @@ function GroupRows({ group, children }: { group: PointGroup; children: React.Rea
       )}
       {children}
     </>
+  )
+}
+
+// Escribir un nombre mueve el punto a esa estación (se crea si no existe); vacío lo deja sin estación.
+// Se confirma con Enter o al salir del campo, para no crear una estación por cada letra.
+function EstacionInput({ value, placeholder, label, onCommit }: { value: string; placeholder: string; label: string; onCommit(nombre: string): void }) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+
+  return (
+    <input
+      className="demo-input assign-input"
+      value={draft}
+      placeholder={placeholder}
+      aria-label={label}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => { if (draft.trim() !== value.trim()) onCommit(draft) }}
+      onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+    />
   )
 }
 

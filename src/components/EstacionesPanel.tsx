@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { estacionColor, type Estacion } from '#/lib/estaciones'
-import { findProtocolo } from '#/lib/protocolos'
+import { estacionColor, metodologiaFor, type Estacion } from '#/lib/point-session'
+import { NO_SUGGESTIONS_HINT } from '#/lib/suggest'
 import type { EstacionSuggestion } from '#/lib/suggest/types'
 
 type Props = {
@@ -76,7 +76,7 @@ export default function EstacionesPanel({ estaciones, counts, onCreate, onUpdate
                       onChange={(event) => onUpdate(estacion.id, { protocolo: event.target.value })}
                     />
                   </td>
-                  <td className="demo-muted">{estacion.metodologia || findProtocolo(estacion.protocolo)?.sigla || '—'}</td>
+                  <td className="demo-muted">{metodologiaFor(estacion.protocolo) || '—'}</td>
                   <td className="demo-muted">{counts[estacion.id] ?? 0}</td>
                   <td>
                     <button
@@ -105,7 +105,7 @@ export default function EstacionesPanel({ estaciones, counts, onCreate, onUpdate
       {suggestions && (
         <div className="flex flex-col gap-2">
           {suggestions.length === 0 ? (
-            <p className="demo-muted m-0 text-xs">No se encontraron grupos: se buscan nombres como TA1-01 y TA1-02 (al menos 2 puntos sin estación con el mismo prefijo).</p>
+            <p className="demo-muted m-0 text-xs">{NO_SUGGESTIONS_HINT}</p>
           ) : (
             suggestions.map((suggestion, index) => (
               <label key={`${suggestion.nombre}-${index}`} className="flex items-center gap-2">

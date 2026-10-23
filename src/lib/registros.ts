@@ -29,12 +29,13 @@ export type Registro = {
   usuario: string | null
   lat: number | null
   lon: number | null
+  id_terreno: string | null
 }
 
 export type RegistroPunto = Registro & { lat: number; lon: number }
 
 const COLUMNS =
-  'id_registro,nombre_proyecto,nombre_comuna,localidad_especifica,protocolo_muestreo,tipo_registro,canonical_name,reino,filo,clase,orden,familia,genero_taxonomico,region,provincia,categoria_conservacion,endemica,genero,epiteto_especifico,nombre_comun_terreno,cantidad,fecha,hora,usuario,lat,lon'
+  'id_registro,nombre_proyecto,nombre_comuna,localidad_especifica,protocolo_muestreo,tipo_registro,canonical_name,reino,filo,clase,orden,familia,genero_taxonomico,region,provincia,categoria_conservacion,endemica,genero,epiteto_especifico,nombre_comun_terreno,cantidad,fecha,hora,usuario,lat,lon,id_terreno'
 const PAGE_SIZE = 1000 // tope por consulta de PostgREST
 
 // Algunos textos vienen con saltos de línea o espacios al final (p. ej. nombres de proyecto).

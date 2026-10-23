@@ -38,8 +38,17 @@ select
     r.usuario,
     -- Agregadas al final: "create or replace" solo permite columnas nuevas después de las existentes.
     t.phylum as filo,
-    t.genus as genero_taxonomico
+    t.genus as genero_taxonomico,
+    -- Terreno y aprobación (requiere terrenos_aprobacion.sql).
+    r.estado,
+    r.id_terreno,
+    te.nombre as nombre_terreno,
+    te.tipo as tipo_terreno,
+    te.componente,
+    r.revisado_por,
+    r.revisado_en
 from public.registros r
+left join public.terrenos te  on te.id_terreno = r.id_terreno
 left join public.proyectos p  on p.id_proyecto = r.id_proyecto
 left join public.comunas c    on c.codigo_comuna = r.comuna_id
 left join public.taxa_cache t on t.gbif_taxon_key = r.gbif_taxon_key
@@ -55,7 +64,8 @@ left join (
 revoke all on public.registros_app_vista from anon;
 grant select on public.registros_app_vista to authenticated;
 
--- 3) RLS: como la vista es security_invoker, el usuario necesita poder LEER cada tabla que une.
+-- 3) RLS: como la vista es security_invoker, el usuario necesita poder LEER cada tabla que une
+--    (la de terrenos la crea terrenos_aprobacion.sql).
 --    "registros: leer (empresa)" ya existe. Crear solo las que falten (si dice "already exists", omitir):
 -- create policy "proyectos: leer (empresa)" on public.proyectos
 --     for select to authenticated using ((auth.jwt() ->> 'email') like '%@ecorestaura.cl');
@@ -66,7 +76,9 @@ grant select on public.registros_app_vista to authenticated;
 -- create policy "especie_rce: leer (empresa)" on public.especie_rce
 --     for select to authenticated using ((auth.jwt() ->> 'email') like '%@ecorestaura.cl');
 
--- 4) Inserción desde la app (aún no construida). No aplicar hasta tener el formulario:
+-- 4) Inserción desde la app (aún no construida). No aplicar hasta tener el formulario.
+--    Con la aprobación, lo subido debe entrar como pendiente: agregar
+--    "and estado = 'pendiente' and revisado_por is null" al with check.
 -- create policy "registros: insertar (empresa)" on public.registros
 --     for insert to authenticated
 --     with check ((auth.jwt() ->> 'email') like '%@ecorestaura.cl');

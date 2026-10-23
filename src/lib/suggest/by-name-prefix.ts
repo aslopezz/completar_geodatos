@@ -12,8 +12,7 @@ function protocoloFromPrefix(prefix: string): string | undefined {
 }
 
 export const byNamePrefix: EstacionSuggester = {
-  id: 'by-name-prefix',
-  label: 'Por prefijo del nombre',
+  hint: 'nombres como TA1-01 y TA1-02 (al menos 2 puntos sin estación con el mismo prefijo)',
   suggest(data, unassigned) {
     const groups = new Map<string, number[]>()
     for (const index of unassigned) {

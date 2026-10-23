@@ -14,3 +14,6 @@ todos.json
 AGENTS.md
 CLAUDE.md
 supabase/*
+*.xlsx
+GLOSSARY.md
+SCHEMA.md
