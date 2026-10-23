@@ -1,17 +1,26 @@
-import { useMemo, useState } from 'react'
-import { trackLengthKm, type ImportResult, type LngLat } from '#/lib/geo-import'
-import type { Species } from '#/lib/species'
-import { exportCsv, exportKmz, exportTracksCsv } from '#/lib/geo-export'
+import { useMemo, useReducer, useState } from 'react'
+import type { ImportResult, LngLat } from '#/lib/geo-import'
+import { download } from '#/lib/export-file'
+import { exportCsv, exportKmz, exportTracksCsv, trackName, trackSummary } from '#/lib/geo-export'
+import { exportDarwinCore, withSpecies } from '#/lib/darwin-core'
 import { getProtocolos } from '#/lib/protocolos'
-import { metodologiaFor, nextMetodologia, resolvePointAttributes, resolvePoints, type CsvMeta, type PointOverride } from '#/lib/point-attributes'
-import { useEstaciones } from '#/hooks/useEstaciones'
+import {
+  estacionColorOf,
+  estacionCounts,
+  groupPoints,
+  initialPointSession,
+  metodologiaFor,
+  pointSessionReducer,
+  resolvePoints,
+  visibleIndexes as visibleIndexesOf,
+} from '#/lib/point-session'
 import EstacionesPanel from '#/components/EstacionesPanel'
-import PointsTable, { type PointGroup } from '#/components/PointsTable'
-import { estacionColor } from '#/lib/estaciones'
+import PointsTable from '#/components/PointsTable'
+import SmaDialog from '#/components/SmaDialog'
 import { formatCoordinate } from '#/lib/format'
-import { SUGGESTERS } from '#/lib/suggest'
+import { suggestEstaciones } from '#/lib/suggest'
 import type { EstacionSuggestion } from '#/lib/suggest/types'
-import { formatUtm, toUtm, type UtmZone } from '#/lib/utm'
+import { formatUtm, type UtmZone } from '#/lib/utm'
 
 const W = 800
 const H = 480
@@ -19,24 +28,26 @@ const PAD = 24
 const NO_ESTACION = '__none__'
 
 export default function GeoPreview({ data, onClear }: { data: ImportResult; onClear(): void }) {
-  const [selectedSpecies, setSelectedSpecies] = useState<Record<number, Species>>({})
-  const [quantities, setQuantities] = useState<Record<number, number>>({})
-  const [meta, setMeta] = useState<CsvMeta>({ estacion: '', terreno: '', protocolo: '', metodologia: '' })
+  const [session, dispatch] = useReducer(pointSessionReducer, initialPointSession)
   const [checked, setChecked] = useState<Set<number>>(() => new Set())
-  const [overrides, setOverrides] = useState<Record<number, PointOverride>>({})
-  const [bulk, setBulk] = useState<PointOverride>({ estacion: '', protocolo: '', metodologia: '' })
+  const [bulk, setBulk] = useState({ estacion: '', protocolo: '', metodologia: '' })
   const [trackNames, setTrackNames] = useState<Record<number, string>>({})
   const [utmZone, setUtmZone] = useState<UtmZone>(19)
-  const [removedPoints, setRemovedPoints] = useState<Set<number>>(() => new Set())
-  const { estaciones, create: createEstacion, createWithPoints, update: updateEstacion, remove: removeEstacion, assign, unassign, getEstacionOf, pointsOfEstacion } = useEstaciones()
   const [assignTarget, setAssignTarget] = useState('')
-  const estacionCounts = Object.fromEntries(estaciones.map((e) => [e.id, pointsOfEstacion(e.id).filter((index) => !removedPoints.has(index)).length]))
-  const visiblePoints = data.points.filter((_, index) => !removedPoints.has(index))
-  const visibleIndexes = data.points.map((_, index) => index).filter((index) => !removedPoints.has(index))
+  const [smaOpen, setSmaOpen] = useState(false)
+  const { estaciones, removed } = session
+  const visibleIndexes = useMemo(() => visibleIndexesOf(data, removed), [data, removed])
+  const visiblePoints = useMemo(() => visibleIndexes.map((index) => data.points[index]), [data, visibleIndexes])
   const checkedIndexes = visibleIndexes.filter((index) => checked.has(index))
   const allChecked = visibleIndexes.length > 0 && checkedIndexes.length === visibleIndexes.length
 
-  const exportPoints = () => resolvePoints(data, { removed: removedPoints, species: selectedSpecies, quantities, overrides, meta, getEstacionOf })
+  // Puntos resueltos y tracks con su nombre: se calculan una vez por cambio, no en cada render.
+  const exportPoints = useMemo(() => resolvePoints(data, session), [data, session])
+  const conEspecie = useMemo(() => withSpecies(exportPoints).length, [exportPoints])
+  const smaExtras = useMemo(
+    () => ({ estaciones, tracks: data.tracks.map((track, index) => ({ nombre: trackName(track, index, trackNames), coords: track.coords })) }),
+    [estaciones, data.tracks, trackNames],
+  )
 
   function toggleChecked(index: number) {
     setChecked((current) => {
@@ -51,95 +62,28 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
     if (window.confirm('¿Limpiar todo? Se cierra el archivo y se pierden las ediciones (especies, estaciones, nombres, puntos quitados).')) onClear()
   }
 
-  function suggestEstaciones(): EstacionSuggestion[] {
-    const unassigned = visibleIndexes.filter((index) => !getEstacionOf(index))
-    // Los tracks se evalúan con el nombre que el usuario les haya puesto en la tabla.
-    const named = { ...data, tracks: data.tracks.map((track, index) => ({ ...track, name: trackNames[index]?.trim() || track.name })) }
-    const merged = new Map<string, EstacionSuggestion>()
-    for (const suggestion of SUGGESTERS.flatMap((suggester) => suggester.suggest(named, unassigned))) {
-      const key = suggestion.nombre.toLowerCase()
-      const previous = merged.get(key)
-      merged.set(key, previous ? {
-        nombre: previous.nombre,
-        protocolo: previous.protocolo ?? suggestion.protocolo,
-        trackIndex: previous.trackIndex ?? suggestion.trackIndex,
-        points: [...new Set([...previous.points, ...suggestion.points])],
-      } : suggestion)
-    }
-    // Una estación ya creada con ese nombre y sin puntos nuevos que sumar no aporta nada.
-    return [...merged.values()].filter((suggestion) => suggestion.points.length > 0 || !estaciones.some((e) => e.nombre.trim().toLowerCase() === suggestion.nombre.toLowerCase()))
-  }
-
   // Si ya existe una estación con ese nombre, los puntos se suman a ella en vez de duplicarla.
   function applySuggestions(selected: EstacionSuggestion[]) {
-    for (const suggestion of selected) {
-      const existing = estaciones.find((e) => e.nombre.trim().toLowerCase() === suggestion.nombre.toLowerCase())
-      if (existing) assign(existing.id, suggestion.points)
-      else createWithPoints(suggestion.nombre, suggestion.protocolo ?? '', suggestion.points, suggestion.trackIndex)
+    for (const { nombre, protocolo, points } of selected) {
+      dispatch({ type: 'assignByName', nombre, protocolo, points, newId: crypto.randomUUID() })
     }
   }
 
   function applyAssign() {
-    if (assignTarget === NO_ESTACION) unassign(checkedIndexes)
-    else if (assignTarget) assign(assignTarget, checkedIndexes)
+    if (assignTarget) dispatch({ type: 'assign', id: assignTarget === NO_ESTACION ? null : assignTarget, points: checkedIndexes })
     setAssignTarget('')
   }
 
   function applyBulk() {
-    const estacion = bulk.estacion?.trim()
-    const protocolo = bulk.protocolo?.trim()
-    const metodologia = bulk.metodologia?.trim()
-    setOverrides((current) => {
-      const next = { ...current }
-      for (const index of checkedIndexes) {
-        const patch: PointOverride = {}
-        if (estacion) patch.estacion = estacion
-        if (protocolo) {
-          patch.protocolo = protocolo
-          patch.metodologia = metodologia || nextMetodologia(current[index]?.protocolo?.trim() || meta.protocolo, protocolo, current[index]?.metodologia ?? meta.metodologia)
-        } else if (metodologia) {
-          patch.metodologia = metodologia
-        }
-        next[index] = { ...next[index], ...patch }
-      }
-      return next
-    })
-  }
-  function setPointProtocolo(index: number, value: string) {
-    setOverrides((current) => ({
-      ...current,
-      [index]: {
-        ...current[index],
-        protocolo: value,
-        metodologia: nextMetodologia(current[index]?.protocolo?.trim() || meta.protocolo, value, current[index]?.metodologia ?? meta.metodologia),
-      },
-    }))
+    const estacion = bulk.estacion.trim()
+    const protocolo = bulk.protocolo.trim()
+    const metodologia = bulk.metodologia.trim()
+    if (estacion) dispatch({ type: 'assignByName', nombre: estacion, points: checkedIndexes, newId: crypto.randomUUID() })
+    if (protocolo) dispatch({ type: 'setProtocolo', points: checkedIndexes, protocolo })
+    if (metodologia) dispatch({ type: 'setMetodologia', points: checkedIndexes, metodologia })
   }
 
-  function placeholdersFor(index: number) {
-    const estacion = getEstacionOf(index)
-    const base = resolvePointAttributes(data.points[index].name, meta, undefined, estacion)
-    const sigla = metodologiaFor(overrides[index]?.protocolo)
-    return {
-      estacion: base.estacion,
-      protocolo: base.protocolo || 'Protocolo',
-      metodologia: (estacion ? sigla || base.metodologia : base.metodologia || sigla) || 'Sigla',
-    }
-  }
-
-  // Un grupo por estación (en orden de creación, sin los vacíos) y "Sin asignar" al final.
-  // Sin estaciones queda un solo grupo sin encabezado, igual que la tabla de siempre.
-  const groups: PointGroup[] = estaciones.length === 0
-    ? [{ key: 'all', label: null, indexes: visibleIndexes }]
-    : [
-        ...estaciones.map((estacion, order) => ({
-          key: estacion.id,
-          label: [estacion.nombre.trim() || '(sin nombre)', estacion.protocolo.trim()].filter(Boolean).join(' · '),
-          color: estacionColor(order),
-          indexes: visibleIndexes.filter((index) => getEstacionOf(index)?.id === estacion.id),
-        })).filter((group) => group.indexes.length > 0),
-        { key: 'none', label: 'Sin asignar', indexes: visibleIndexes.filter((index) => !getEstacionOf(index)) },
-      ].filter((group) => group.indexes.length > 0)
+  const groups = groupPoints(session, visibleIndexes)
 
   const { project, hasData } = useMemo(() => {
     const all: LngLat[] = [
@@ -196,18 +140,16 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
                 <title>{t.name}</title>
               </polyline>
             ))}
-            {visiblePoints.map((p) => {
+            {visibleIndexes.map((index) => {
+              const p = data.points[index]
               const [x, y] = project(p.coord)
-              const index = data.points.indexOf(p)
-              const estacionId = getEstacionOf(index)?.id
-              const order = estaciones.findIndex((e) => e.id === estacionId)
               return (
                 <circle
                   key={index}
                   cx={x}
                   cy={y}
                   r={4.5}
-                  fill={order >= 0 ? estacionColor(order) : 'var(--palm)'}
+                  fill={estacionColorOf(session, index) ?? 'var(--palm)'}
                   stroke="var(--surface-strong)"
                   strokeWidth={1.5}
                 >
@@ -233,15 +175,37 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
               <option value={19}>19S</option>
             </select>
           </label>
-          <button type="button" className="demo-button demo-button-points" onClick={() => exportCsv(data.fileName, exportPoints(), meta.terreno)}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportCsv(data.fileName, exportPoints, session.terreno))}>
             Exportar CSV puntos
           </button>
+          <button
+            type="button"
+            className="demo-button demo-button-points"
+            disabled={conEspecie === 0}
+            title="Solo los puntos con especie elegida de la lista"
+            onClick={() => download(exportDarwinCore(data.fileName, exportPoints, session.terreno))}
+          >
+            Exportar Darwin Core ({conEspecie})
+          </button>
+          <button type="button" className="demo-button demo-button-points" disabled={conEspecie === 0} title="Solo los puntos con especie" onClick={() => setSmaOpen(true)}>
+            Exportar planilla SMA ({conEspecie})
+          </button>
+          <SmaDialog
+            open={smaOpen}
+            onClose={() => setSmaOpen(false)}
+            fileName={data.fileName}
+            terreno={session.terreno}
+            sma={session.sma}
+            points={exportPoints}
+            extras={smaExtras}
+            dispatch={dispatch}
+          />
            {data.tracks.length > 0 && (
-            <button type="button" className="demo-button demo-button-tracks" onClick={() => exportTracksCsv(data, utmZone, trackNames)}>
+            <button type="button" className="demo-button demo-button-tracks" onClick={() => download(exportTracksCsv(data, utmZone, trackNames))}>
               Exportar CSV tracks
             </button>
           )}
-          <button type="button" className="demo-button demo-button-points" onClick={() => exportKmz(data, exportPoints(), utmZone, trackNames)}>
+          <button type="button" className="demo-button demo-button-points" onClick={() => download(exportKmz(data, exportPoints, utmZone, trackNames))}>
             Exportar KMZ
           </button>
           <button type="button" className="demo-button alert" onClick={clearData}>
@@ -254,12 +218,9 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
             Terreno
             <input
               className="demo-input"
-              value={meta.terreno}
+              value={session.terreno}
               placeholder="Nombre de la campaña"
-              onChange={(event) => {
-                const value = event.target.value
-                setMeta((current) => ({ ...current, terreno: value }))
-              }}
+              onChange={(event) => dispatch({ type: 'setTerreno', terreno: event.target.value })}
             />
           </label>
           <datalist id="protocolos-muestreo">
@@ -268,17 +229,17 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
             ))}
           </datalist>
           <p className="demo-muted m-0 text-xs sm:col-span-2 lg:col-span-4">
-            El CSV incluye todos los puntos; los que no tienen especie ({visiblePoints.filter((p) => !selectedSpecies[data.points.indexOf(p)]).length} de {visiblePoints.length}) salen con las columnas de especie vacías.
+            El CSV incluye todos los puntos; los que no tienen especie ({visibleIndexes.filter((index) => !session.edits[index]?.species).length} de {visibleIndexes.length}) salen con las columnas de especie vacías.
           </p>
         </div>
 
         <EstacionesPanel
           estaciones={estaciones}
-          counts={estacionCounts}
-          onCreate={() => createEstacion()}
-          onUpdate={updateEstacion}
-          onRemove={removeEstacion}
-          onSuggest={suggestEstaciones}
+          counts={estacionCounts(session)}
+          onCreate={() => dispatch({ type: 'createEstacion', id: crypto.randomUUID() })}
+          onUpdate={(id, patch) => dispatch({ type: 'updateEstacion', id, patch })}
+          onRemove={(id) => dispatch({ type: 'removeEstacion', id })}
+          onSuggest={() => suggestEstaciones(data, session, trackNames)}
           onApplySuggestions={applySuggestions}
         />
 
@@ -308,16 +269,13 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
             </label>
             <label className="flex flex-col gap-1 font-semibold">
               Protocolo
-              <input className="demo-input" list="protocolos-muestreo" value={bulk.protocolo} placeholder="Sin cambios si está vacío" onChange={(event) => {
-                const value = event.target.value
-                setBulk((current) => ({ ...current, protocolo: value, metodologia: nextMetodologia(current.protocolo, value, current.metodologia ?? '') }))
-              }} />
+              <input className="demo-input" list="protocolos-muestreo" value={bulk.protocolo} placeholder="Sin cambios si está vacío" onChange={(event) => setBulk((current) => ({ ...current, protocolo: event.target.value }))} />
             </label>
             <label className="flex flex-col gap-1 font-semibold">
               Metodología
-              <input className="demo-input assign-input" value={bulk.metodologia} placeholder="Auto según protocolo" onChange={(event) => setBulk((current) => ({ ...current, metodologia: event.target.value }))} />
+              <input className="demo-input assign-input" value={bulk.metodologia} placeholder={metodologiaFor(bulk.protocolo) || 'Auto según protocolo'} onChange={(event) => setBulk((current) => ({ ...current, metodologia: event.target.value }))} />
             </label>
-            <button type="button" className="demo-button" disabled={!bulk.estacion?.trim() && !bulk.protocolo?.trim() && !bulk.metodologia?.trim()} onClick={applyBulk}>
+            <button type="button" className="demo-button" disabled={!bulk.estacion.trim() && !bulk.protocolo.trim() && !bulk.metodologia.trim()} onClick={applyBulk}>
               Aplicar
             </button>
             <button type="button" className="demo-button demo-button-secondary" onClick={() => setChecked(new Set())}>
@@ -326,10 +284,10 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
           </div>
         )}
 
-        {removedPoints.size > 0 && (
+        {removed.size > 0 && (
           <div className="demo-list-item flex items-center justify-between gap-3 text-sm">
-            <span>Se quitaron {removedPoints.size} puntos de esta vista.</span>
-            <button type="button" className="demo-button demo-button-secondary point-remove" onClick={() => setRemovedPoints(new Set())}>
+            <span>Se quitaron {removed.size} puntos de esta vista.</span>
+            <button type="button" className="demo-button demo-button-secondary point-remove" onClick={() => dispatch({ type: 'restorePoints' })}>
               Restaurar
             </button>
           </div>
@@ -346,19 +304,12 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
               points={data.points}
               groups={groups}
               utmZone={utmZone}
+              session={session}
+              dispatch={dispatch}
               checked={checked}
               allChecked={allChecked}
-              overrides={overrides}
-              species={selectedSpecies}
-              quantities={quantities}
-              placeholdersFor={placeholdersFor}
               onToggle={toggleChecked}
               onToggleAll={() => setChecked(allChecked ? new Set() : new Set(visibleIndexes))}
-              onOverride={(index, patch) => setOverrides((current) => ({ ...current, [index]: { ...current[index], ...patch } }))}
-              onProtocolo={setPointProtocolo}
-              onSelectSpecies={(index, species) => setSelectedSpecies((current) => ({ ...current, [index]: species }))}
-              onQuantity={(index, next) => setQuantities((current) => ({ ...current, [index]: Number.isFinite(next) && next >= 1 ? Math.floor(next) : 1 }))}
-              onRemove={(index) => setRemovedPoints((current) => new Set(current).add(index))}
             />
           </div>
         )}
@@ -373,8 +324,7 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
                 </thead>
                 <tbody>
                   {data.tracks.map((track, index) => {
-                    const start = track.coords[0]
-                    const end = track.coords[track.coords.length - 1]
+                    const { start, end, startUtm, endUtm, lengthKm } = trackSummary(track, utmZone)
                     return (
                       <tr key={`t${index}`}>
                         <td className="sticky-col sticky-col-name">
@@ -385,11 +335,11 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
                             onChange={(event) => setTrackNames((current) => ({ ...current, [index]: event.target.value }))}
                           />
                         </td>
-                        <td className="demo-muted">{Math.round(trackLengthKm(track.coords) * 1000).toLocaleString('es-CL')}</td>
+                        <td className="demo-muted">{Math.round(lengthKm * 1000).toLocaleString('es-CL')}</td>
                         <td className="demo-muted">{formatCoordinate(start)}</td>
                         <td className="demo-muted">{formatCoordinate(end)}</td>
-                        <td className="demo-muted">{formatUtm(toUtm(start, utmZone))}</td>
-                        <td className="demo-muted">{formatUtm(toUtm(end, utmZone))}</td>
+                        <td className="demo-muted">{formatUtm(startUtm)}</td>
+                        <td className="demo-muted">{formatUtm(endUtm)}</td>
                       </tr>
                     )
                   })}

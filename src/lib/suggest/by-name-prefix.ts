@@ -1,19 +1,19 @@
 import { findProtocolo } from '#/lib/protocolos'
 import type { EstacionSuggester, EstacionSuggestion } from '#/lib/suggest/types'
 
-// "TA1-01", "TA1_02", "TA1 03" → prefijo "TA1".
+// "TR1-01", "TR1_02", "TR1 03" → prefijo "TR1".
 const NAME_PATTERN = /^(.+?)[-_\s]+\d+$/
 
-// El protocolo solo se infiere si las letras del prefijo coinciden con una sigla del catálogo ("TA1" → "TA").
+// El protocolo solo se infiere si las letras del prefijo coinciden con una sigla del catálogo o un alias ("TR1" → "TR", "TA1" → "TA").
 function protocoloFromPrefix(prefix: string): string | undefined {
   const letters = prefix.match(/^[A-Za-zÁÉÍÓÚáéíóúÑñ]+/)?.[0]
   const protocolo = findProtocolo(letters)
-  return protocolo && protocolo.sigla && protocolo.sigla.toLowerCase() === letters?.toLowerCase() ? protocolo.nombre : undefined
+  const siglas = protocolo ? [protocolo.sigla, ...(protocolo.alias ?? [])].filter(Boolean).map((s) => s.toLowerCase()) : []
+  return protocolo && letters && siglas.includes(letters.toLowerCase()) ? protocolo.nombre : undefined
 }
 
 export const byNamePrefix: EstacionSuggester = {
-  id: 'by-name-prefix',
-  label: 'Por prefijo del nombre',
+  hint: 'nombres como TR1-01 y TR1-02 (al menos 2 puntos sin estación con el mismo prefijo)',
   suggest(data, unassigned) {
     const groups = new Map<string, number[]>()
     for (const index of unassigned) {

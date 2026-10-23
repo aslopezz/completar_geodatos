@@ -14,6 +14,7 @@ import { Route as CuentaRouteImport } from './routes/cuenta'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MapaRouteImport } from './routes/mapa'
+import { Route as ProyectosRouteImport } from './routes/proyectos'
 import { Route as RegistrosRouteImport } from './routes/registros'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 
@@ -42,6 +43,11 @@ const MapaRoute = MapaRouteImport.update({
   path: '/mapa',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProyectosRoute = ProyectosRouteImport.update({
+  id: '/proyectos',
+  path: '/proyectos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegistrosRoute = RegistrosRouteImport.update({
   id: '/registros',
   path: '/registros',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
+  '/proyectos': typeof ProyectosRoute
   '/registros': typeof RegistrosRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
+  '/proyectos': typeof ProyectosRoute
   '/registros': typeof RegistrosRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
+  '/proyectos': typeof ProyectosRoute
   '/registros': typeof RegistrosRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/mapa'
+    | '/proyectos'
     | '/registros'
     | '/reset-password'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/mapa'
+    | '/proyectos'
     | '/registros'
     | '/reset-password'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/mapa'
+    | '/proyectos'
     | '/registros'
     | '/reset-password'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapaRoute: typeof MapaRoute
+  ProyectosRoute: typeof ProyectosRoute
   RegistrosRoute: typeof RegistrosRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MapaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/proyectos': {
+      id: '/proyectos'
+      path: '/proyectos'
+      fullPath: '/proyectos'
+      preLoaderRoute: typeof ProyectosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/registros': {
       id: '/registros'
       path: '/registros'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapaRoute: MapaRoute,
+  ProyectosRoute: ProyectosRoute,
   RegistrosRoute: RegistrosRoute,
   ResetPasswordRoute: ResetPasswordRoute,
 }

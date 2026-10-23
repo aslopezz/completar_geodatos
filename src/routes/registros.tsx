@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { requireSession } from '#/lib/auth'
 import { useRegistros } from '#/hooks/useRegistros'
 import { especieLabel } from '#/lib/registros'
+import { download } from '#/lib/export-file'
 import {
   cascadeOptions,
   EMPTY_FILTERS,
@@ -147,7 +148,7 @@ function RegistrosPage() {
               type="button"
               className="demo-button demo-button-secondary"
               disabled={filtered.length === 0}
-              onClick={() => exportRegistrosCsv(filtered)}
+              onClick={() => download(exportRegistrosCsv(filtered))}
             >
               Descargar CSV ({filtered.length})
             </button>

@@ -1,19 +1,22 @@
-export type Protocolo = { id: string; nombre: string; sigla: string; alias?: readonly string[] }
+// sma: nombre en la lista de la planilla SMA (src/lib/sma/listas.ts); sin él, la planilla avisa que no calza.
+// tipoMonitoreo: el que se propone para sus estaciones en la planilla SMA.
+export type Protocolo = { id: string; nombre: string; sigla: string; alias?: readonly string[]; sma?: string; tipoMonitoreo?: string }
 
 // Fuente única de protocolos y siglas. La sigla alimenta la columna "NOMBRE METODOLOGIA".
 // sigla '' = sin sigla definida.
 const PROTOCOLOS: readonly Protocolo[] = [
-  { id: 'transecta', nombre: 'Transecta', sigla: 'TA' },
-  { id: 'poa', nombre: 'Punto de observación de aves', sigla: 'POA', alias: ['Punto de aves', 'Puntos de aves'] },
-  { id: 'bat', nombre: 'Ecolocalizadores', sigla: 'BAT', alias: ['Detección de ecolocalizaciones'] },
-  { id: 'ct', nombre: 'Cámaras trampa', sigla: 'CT', alias: ['Trampas cámara', 'Trampa cámara'] },
-  { id: 'tsh', nombre: 'Trampas Sherman', sigla: 'TSH', alias: ['Trampas sherman'] },
+  // TA era la sigla anterior: queda como alias para que los nombres viejos (TA1-01) se sigan reconociendo.
+  { id: 'transecta', nombre: 'Transecta', sigla: 'TR', alias: ['TA'], sma: 'Transecta', tipoMonitoreo: 'Transecto' },
+  { id: 'poa', nombre: 'Punto de observación de aves', sigla: 'POA', alias: ['Punto de aves', 'Puntos de aves'], sma: 'Punto de aves' },
+  { id: 'bat', nombre: 'Ecolocalizadores', sigla: 'BAT', alias: ['Detección de ecolocalizaciones'], sma: 'Detección de ecolocalizaciones' },
+  { id: 'ct', nombre: 'Cámaras trampa', sigla: 'CT', alias: ['Trampas cámara', 'Trampa cámara'], sma: 'Trampas cámara' },
+  { id: 'tsh', nombre: 'Trampas Sherman', sigla: 'TSH', alias: ['Trampas sherman'], sma: 'Trampas Sherman' },
   { id: 'mn', nombre: 'Monitoreo nocturno', sigla: 'MN', alias: ['Muestreo nocturno'] },
-  { id: 'mta', nombre: 'Tránsito aéreo', sigla: 'MTA' },
-  { id: 'censo', nombre: 'Censo', sigla: 'C' },
-  { id: 'punto-conteo', nombre: 'Punto de conteo', sigla: 'PdC' },
-  { id: 'recorrido-pedestre', nombre: 'Recorrido pedestre', sigla: 'RP' },
-  { id: 'transecta-aves', nombre: 'Transecta para aves', sigla: 'TrA' },
+  { id: 'mta', nombre: 'Tránsito aéreo', sigla: 'MTA', sma: 'Observación de tránsito aéreo' },
+  { id: 'censo', nombre: 'Censo', sigla: 'C', sma: 'Censo' },
+  { id: 'punto-conteo', nombre: 'Punto de conteo', sigla: 'PdC', sma: 'Punto de conteo' },
+  { id: 'recorrido-pedestre', nombre: 'Recorrido pedestre', sigla: 'RP', sma: 'Recorrido pedestre', tipoMonitoreo: 'Transecto' },
+  { id: 'transecta-aves', nombre: 'Transecta para aves', sigla: 'TrA', sma: 'Transecta para aves', tipoMonitoreo: 'Transecto' },
 ]
 
 // Sin mayúsculas, tildes ni espacios repetidos.

@@ -4,7 +4,6 @@ export type EstacionSuggestion = { nombre: string; protocolo?: string; points: n
 
 // Contrato común: devuelve sugerencias sin modificar ningún estado.
 export interface EstacionSuggester {
-  id: string
-  label: string
+  hint: string // qué busca, para el mensaje de "no se encontraron grupos"
   suggest(data: ImportResult, unassigned: number[]): EstacionSuggestion[]
 }
