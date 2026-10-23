@@ -2,6 +2,7 @@ import { useMemo, useReducer, useState } from 'react'
 import type { ImportResult, LngLat } from '#/lib/geo-import'
 import { download } from '#/lib/export-file'
 import { exportCsv, exportKmz, exportTracksCsv, trackSummary } from '#/lib/geo-export'
+import { exportDarwinCore, withSpecies } from '#/lib/darwin-core'
 import { getProtocolos } from '#/lib/protocolos'
 import {
   estacionColorOf,
@@ -39,6 +40,7 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
   const allChecked = visibleIndexes.length > 0 && checkedIndexes.length === visibleIndexes.length
 
   const exportPoints = () => resolvePoints(data, session)
+  const conEspecie = withSpecies(exportPoints()).length
 
   function toggleChecked(index: number) {
     setChecked((current) => {
@@ -168,6 +170,15 @@ export default function GeoPreview({ data, onClear }: { data: ImportResult; onCl
           </label>
           <button type="button" className="demo-button demo-button-points" onClick={() => download(exportCsv(data.fileName, exportPoints(), session.terreno))}>
             Exportar CSV puntos
+          </button>
+          <button
+            type="button"
+            className="demo-button demo-button-points"
+            disabled={conEspecie === 0}
+            title="Solo los puntos con especie elegida de la lista"
+            onClick={() => download(exportDarwinCore(data.fileName, exportPoints(), session.terreno))}
+          >
+            Exportar Darwin Core ({conEspecie})
           </button>
            {data.tracks.length > 0 && (
             <button type="button" className="demo-button demo-button-tracks" onClick={() => download(exportTracksCsv(data, utmZone, trackNames))}>

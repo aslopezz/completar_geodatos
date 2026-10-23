@@ -10,6 +10,7 @@ export type Species = {
   family: string | null
   categoria_conservacion: string | null
   decreto: string | null
+  gbif_taxon_key: number | null // clave GBIF; identifica la especie al subirla a la base
   fuente?: 'catalogo' | 'gbif'
 }
 
@@ -27,6 +28,8 @@ export async function searchSpecies(query: string, signal?: AbortSignal): Promis
 }
 
 type GbifSuggestion = {
+  key?: number
+  acceptedKey?: number // solo en sinónimos: la clave del nombre aceptado
   canonicalName?: string
   kingdom?: string
   phylum?: string
@@ -59,6 +62,7 @@ async function searchGbif(query: string, signal?: AbortSignal): Promise<Species[
       family: item.family ?? null,
       categoria_conservacion: null,
       decreto: null,
+      gbif_taxon_key: item.acceptedKey ?? item.key ?? null,
       fuente: 'gbif',
     })
   }
@@ -70,7 +74,7 @@ async function searchCatalog(query: string, signal?: AbortSignal): Promise<Speci
 
   const term = query.trim().replace(/[,*()]/g, ' ')
   const params = new URLSearchParams({
-    select: 'genero,epiteto_especifico,nombre_comun_terreno,canonical_name,kingdom,phylum,class,order,family,categoria_conservacion,decreto',
+    select: 'genero,epiteto_especifico,nombre_comun_terreno,canonical_name,kingdom,phylum,class,order,family,categoria_conservacion,decreto,gbif_taxon_key',
     or: `(canonical_name.ilike.*${term}*,genero.ilike.*${term}*,epiteto_especifico.ilike.*${term}*)`,
     limit: '20',
   })

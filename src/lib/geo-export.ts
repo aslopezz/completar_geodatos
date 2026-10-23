@@ -13,14 +13,14 @@ function coordinate([lng, lat]: LngLat): string {
   return `${lng},${lat}`
 }
 
-// Nombre que el usuario le dio al track en la tabla, o el del archivo si lo dejÃ³ vacÃ­o.
+// Nombre que el usuario le dio al track en la tabla, o el del archivo si lo dejó vacío.
 export function trackName(track: GeoTrack, index: number, trackNames: Record<number, string>): string {
   return trackNames[index]?.trim() || track.name
 }
 
 export type TrackSummary = { start: LngLat; end: LngLat; startUtm: UtmCoordinate; endUtm: UtmCoordinate; lengthKm: number }
 
-// Inicio, tÃ©rmino y largo de un track: lo usan el KMZ, el CSV de tracks y la tabla de tracks.
+// Inicio, término y largo de un track: lo usan el KMZ, el CSV de tracks y la tabla de tracks.
 export function trackSummary(track: GeoTrack, zone: UtmZone): TrackSummary {
   const start = track.coords[0]
   const end = track.coords[track.coords.length - 1]
@@ -33,7 +33,7 @@ export function exportKmz(data: ImportResult, points: ExportPoint[], zone: UtmZo
     const utm = toUtm(point.coord, zone)
     const timestamp = point.timestamp && !Number.isNaN(Date.parse(point.timestamp))
       ? `<TimeStamp><when>${xml(point.timestamp)}</when></TimeStamp>` : ''
-    const details = [selected && `Especie: ${speciesLabel(selected)}${selected.fuente === 'gbif' ? ' (GBIF)' : ''}`, selected?.nombre_comun_terreno && `Nombre comÃºn: ${selected.nombre_comun_terreno}`]
+    const details = [selected && `Especie: ${speciesLabel(selected)}${selected.fuente === 'gbif' ? ' (GBIF)' : ''}`, selected?.nombre_comun_terreno && `Nombre común: ${selected.nombre_comun_terreno}`]
       .filter(Boolean).join('\n')
     const speciesData = `<ExtendedData><Data name="cantidad"><value>${point.cantidad}</value></Data><Data name="utm_zona"><value>${zone}S</value></Data><Data name="utm_este_m"><value>${utm.easting.toFixed(3)}</value></Data><Data name="utm_norte_m"><value>${utm.northing.toFixed(3)}</value></Data>${selected ? [
           ['nombre_cientifico', speciesLabel(selected)],
@@ -86,7 +86,7 @@ export function exportTracksCsv(data: ImportResult, zone: UtmZone, trackNames: R
 
 // Formato que lee la app Shiny (aslopezz/graficos_eco): separador ";", UTF-8,
 // nombres de columna tal cual, FECHA dd-mm-YYYY y COORDENADAS como "lat, lon".
-// Una fila por punto; los puntos sin especie salen con las columnas de especie vacÃ­as.
+// Una fila por punto; los puntos sin especie salen con las columnas de especie vacías.
 export function exportCsv(fileName: string, points: ExportPoint[], terreno: string): ExportFile {
   const headers = ['TERRENO', 'ESTACION', 'PROTOCOLO MUESTREO', 'NOMBRE METODOLOGIA', 'FECHA', 'HORA', 'COORDENADAS', 'REINO', 'FILO', 'CLASE', 'ORDEN', 'FAMILIA', 'GENERO', 'EPITETO ESPECIFICO', 'NOMBRE COMUN', 'CANTIDAD', 'CATEGORIA CONSERVACION', 'DECRETO', 'FUENTE ESPECIE']
   const rows: string[][] = [headers]
