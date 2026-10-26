@@ -36,7 +36,8 @@ export const EMPTY_FILTERS: Filters = {
 export const ENDEMICA_UNKNOWN = 'Indeterminada'
 export const endemicaOf = (r: Registro) => r.endemica?.trim() || ENDEMICA_UNKNOWN
 
-const norm = (s: string | null | undefined) => (s ?? '').toLowerCase()
+// Sin tildes ni mayúsculas: "aguila" encuentra "Águila".
+const norm = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 export const uniqueSorted = (values: (string | null)[]) =>
   [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'es'))

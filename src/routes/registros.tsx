@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { requireSession } from '#/lib/auth'
 import { useRegistros } from '#/hooks/useRegistros'
-import { especieLabel } from '#/lib/registros'
+import { RegistrosTable } from '#/components/RegistrosTable'
 import { download } from '#/lib/export-file'
 import {
   cascadeOptions,
@@ -24,8 +24,6 @@ export const Route = createFileRoute('/registros')({
   },
   component: RegistrosPage,
 })
-
-const PAGE_SIZE = 50
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -54,27 +52,21 @@ function RegistrosPage() {
   // draft = lo que el usuario está eligiendo; applied = lo que se aplicó con "Buscar".
   const [draft, setDraft] = useState<Filters>(EMPTY_FILTERS)
   const [applied, setApplied] = useState<Filters>(EMPTY_FILTERS)
-  const [page, setPage] = useState(0)
 
   const rowsAll = data ?? []
   const proyectos = useMemo(() => uniqueSorted(rowsAll.map((r) => r.nombre_proyecto)), [data])
 
   const filtered = useMemo(() => rowsAll.filter((r) => matches(r, applied)), [data, applied])
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const current = Math.min(page, pageCount - 1)
-  const rows = filtered.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) => setDraft((f) => ({ ...f, [key]: value }))
 
   const search = (e: React.FormEvent) => {
     e.preventDefault()
     setApplied(draft)
-    setPage(0)
   }
   const clear = () => {
     setDraft(EMPTY_FILTERS)
     setApplied(EMPTY_FILTERS)
-    setPage(0)
   }
 
   const cascade = (levels: typeof TAXONOMY | typeof GEOGRAPHY, all: (label: string) => string) =>
@@ -143,7 +135,10 @@ function RegistrosPage() {
             </section>
           </form>
 
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex justify-end gap-2">
+            <Link to="/cargar-planilla" className="demo-button demo-button-secondary">
+              Cargar planilla
+            </Link>
             <button
               type="button"
               className="demo-button demo-button-secondary"
@@ -154,56 +149,7 @@ function RegistrosPage() {
             </button>
           </div>
 
-          <div className="demo-table-shell">
-            <table className="demo-table text-sm whitespace-nowrap">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Especie</th>
-                  <th>Nombre común</th>
-                  <th>Cantidad</th>
-                  <th>Ubicación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id_registro}>
-                    <td>{r.fecha ?? '—'}</td>
-                    <td>{especieLabel(r)}</td>
-                    <td className="demo-muted">{r.nombre_comun_terreno ?? '—'}</td>
-                    <td>{r.cantidad ?? '—'}</td>
-                    <td className="demo-muted">
-                      {[r.localidad_especifica, r.nombre_comuna].filter(Boolean).join(', ') || '—'}
-                    </td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="demo-muted">
-                      Sin resultados.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between gap-3 text-sm">
-            <button type="button" className="demo-button demo-button-secondary" disabled={current === 0} onClick={() => setPage(current - 1)}>
-              Anterior
-            </button>
-            <span className="demo-muted">
-              Página {current + 1} de {pageCount}
-            </span>
-            <button
-              type="button"
-              className="demo-button demo-button-secondary"
-              disabled={current >= pageCount - 1}
-              onClick={() => setPage(current + 1)}
-            >
-              Siguiente
-            </button>
-          </div>
+          <RegistrosTable data={filtered} />
         </>
       )}
     </main>

@@ -48,7 +48,7 @@ export function RegistrosMap({ registros }: { registros: RegistroPunto[] }) {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map)
 
-      const color = getComputedStyle(document.documentElement).getPropertyValue('--lagoon-deep').trim()
+      const color = getComputedStyle(document.documentElement).getPropertyValue('--map-marker').trim()
       const group = L.featureGroup(
         registros.map((r) =>
           L.circleMarker([r.lat, r.lon], { radius: 5, color, weight: 1, fillColor: color, fillOpacity: 0.6 }).bindPopup(

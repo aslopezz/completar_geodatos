@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CargarPlanillaRouteImport } from './routes/cargar-planilla'
 import { Route as CuentaRouteImport } from './routes/cuenta'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
@@ -21,6 +22,11 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CargarPlanillaRoute = CargarPlanillaRouteImport.update({
+  id: '/cargar-planilla',
+  path: '/cargar-planilla',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CuentaRoute = CuentaRouteImport.update({
@@ -61,6 +67,7 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cargar-planilla': typeof CargarPlanillaRoute
   '/cuenta': typeof CuentaRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cargar-planilla': typeof CargarPlanillaRoute
   '/cuenta': typeof CuentaRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -82,6 +90,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cargar-planilla': typeof CargarPlanillaRoute
   '/cuenta': typeof CuentaRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/cargar-planilla'
     | '/cuenta'
     | '/forgot-password'
     | '/login'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/cargar-planilla'
     | '/cuenta'
     | '/forgot-password'
     | '/login'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/cargar-planilla'
     | '/cuenta'
     | '/forgot-password'
     | '/login'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CargarPlanillaRoute: typeof CargarPlanillaRoute
   CuentaRoute: typeof CuentaRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
@@ -141,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cargar-planilla': {
+      id: '/cargar-planilla'
+      path: '/cargar-planilla'
+      fullPath: '/cargar-planilla'
+      preLoaderRoute: typeof CargarPlanillaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cuenta': {
@@ -197,6 +217,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CargarPlanillaRoute: CargarPlanillaRoute,
   CuentaRoute: CuentaRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,

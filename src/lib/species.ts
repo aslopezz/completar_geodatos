@@ -75,7 +75,7 @@ async function searchCatalog(query: string, signal?: AbortSignal): Promise<Speci
   const term = query.trim().replace(/[,*()]/g, ' ')
   const params = new URLSearchParams({
     select: 'genero,epiteto_especifico,nombre_comun_terreno,canonical_name,kingdom,phylum,class,order,family,categoria_conservacion,decreto,gbif_taxon_key',
-    or: `(canonical_name.ilike.*${term}*,genero.ilike.*${term}*,epiteto_especifico.ilike.*${term}*)`,
+    or: `(canonical_name.ilike.*${term}*,genero.ilike.*${term}*,epiteto_especifico.ilike.*${term}*,nombre_comun_terreno.ilike.*${term}*)`,
     limit: '20',
   })
   const response = await fetch(`${supabaseUrl}/rest/v1/especies_vista?${params}`, {
