@@ -125,7 +125,7 @@ export function DestinoImportacion({ terrenos, registrosPorTerreno, destino, onC
         </div>
       )}
 
-      <p className="demo-muted m-0 text-sm">{faltan.length === 0 ? 'Destino completo. Guardar todavía no está disponible.' : faltan[0]}</p>
+      <p className="demo-muted m-0 text-sm">{faltan.length === 0 ? 'Destino completo.' : faltan[0]}</p>
     </section>
   )
 }
