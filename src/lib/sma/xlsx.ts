@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type { ExportFile } from '#/lib/export-file'
+import { sheetPaths } from '#/lib/import/read-xlsx'
 import type { Celda, Fila, Planilla } from '#/lib/sma/planilla'
 import templateUrl from '#/assets/sma/FormatoBiodiversidadMonitoreoYLineaBase_v5.2.xlsx?url'
 
@@ -16,19 +17,6 @@ function escapeXml(text: string): string {
 
 function colIndex(col: string): number {
   return [...col].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0)
-}
-
-// Ruta del XML de cada hoja según su nombre (workbook.xml + sus relaciones).
-// Con expresiones regulares y no DOMParser, para poder probarlo fuera del navegador.
-function sheetPaths(files: Record<string, Uint8Array>): Map<string, string> {
-  const rels = strFromU8(files['xl/_rels/workbook.xml.rels'])
-  const targets = new Map([...rels.matchAll(/<Relationship [^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"/g)].map(([, id, target]) => [id, target]))
-  const paths = new Map<string, string>()
-  for (const [, name, id] of strFromU8(files['xl/workbook.xml']).matchAll(/<sheet [^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"/g)) {
-    const target = targets.get(id) ?? ''
-    paths.set(name, target.startsWith('/') ? target.slice(1) : `xl/${target}`)
-  }
-  return paths
 }
 
 // Celdas de una fila de la plantilla ('' si la fila no existe o está vacía, <row …/>).

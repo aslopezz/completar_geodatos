@@ -32,6 +32,8 @@
   --alert-line: rgba(196, 71, 71, 0.35);
   --export-points: #99a4da;
   --export-tracks: #89eae9;
+  /* Puntos del mapa de registros; los tiles de OpenStreetMap son claros en ambos temas, por eso no cambia con el tema */
+  --map-marker: #008080;
   /* Colores por estación (mapa, panel y grupos de la tabla); legibles en tema claro y oscuro */
   --estacion-1: #3a86c8;
   --estacion-2: #e08a2c;
@@ -374,6 +376,17 @@ pre code {
   width: auto;
 }
 
+/* Campo dentro de una celda de tabla: más bajo y angosto que un campo de formulario. */
+.demo-input-cell {
+  width: 8rem;
+  padding: 0.3rem 0.5rem;
+}
+
+/* Fila de tabla que necesita atención (p. ej. registro sin punto o especie sin clave). */
+.demo-table tr.demo-row-alert td {
+  background: var(--alert-bg);
+}
+
 .demo-textarea {
   min-height: 7rem;
   padding: 0.8rem 0.9rem;
@@ -406,6 +419,17 @@ pre code {
 .demo-button:hover {
   transform: translateY(-1px);
   background: color-mix(in oklab, var(--lagoon) 30%, var(--surface-strong));
+}
+
+/* Un <Link> con clase demo-button hereda el subrayado y el color de `a`/`a:hover`: se anulan para que se vea igual que un <button>. */
+a.demo-button {
+  text-decoration: none;
+}
+a.demo-button:hover {
+  color: var(--sea-ink);
+}
+a.demo-button-secondary:hover {
+  color: var(--sea-ink-soft);
 }
 
 .demo-button:disabled {

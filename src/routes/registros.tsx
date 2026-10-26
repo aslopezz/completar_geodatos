@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { requireSession } from '#/lib/auth'
 import { useRegistros } from '#/hooks/useRegistros'
 import { RegistrosTable } from '#/components/RegistrosTable'
@@ -135,7 +135,10 @@ function RegistrosPage() {
             </section>
           </form>
 
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex justify-end gap-2">
+            <Link to="/cargar-planilla" className="demo-button demo-button-secondary">
+              Cargar planilla
+            </Link>
             <button
               type="button"
               className="demo-button demo-button-secondary"
